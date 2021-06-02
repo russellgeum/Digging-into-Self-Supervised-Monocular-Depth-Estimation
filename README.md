@@ -5,10 +5,10 @@ This repo follow up new KITTI depth bechmark split (But except Person videos)
 - [KITTI Raw Data](http://www.cvlibs.net/datasets/kitti/raw_data.php)  
 # Requirements  
 ```
-cv2
 numpy
-torch
-albumentations
+Pillow
+torch >= 1.7.1
+albumentations == 0.5.2
 ```
 # Folder  
 ```
