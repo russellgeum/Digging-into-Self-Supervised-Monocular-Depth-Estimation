@@ -6,10 +6,10 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+# from model_layers import *
 from collections import OrderedDict
-"""
-Following up https://github.com/nianticlabs/monodepth2/tree/master/networks
-"""
+
+
 def upsample(tensor):
     return F.interpolate(tensor, scale_factor = 2, mode = "nearest")
 

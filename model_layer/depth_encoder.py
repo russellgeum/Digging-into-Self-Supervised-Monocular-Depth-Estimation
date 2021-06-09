@@ -7,9 +7,8 @@ import torch
 import torch.nn as nn
 import torchvision.models as models
 import torch.utils.model_zoo as model_zoo
-"""
-Following up https://github.com/nianticlabs/monodepth2/tree/master/networks
-"""
+
+
 class ResNetMultiImageInput(models.ResNet):
     """
     Constructs a resnet model with varying number of input images.
@@ -64,7 +63,6 @@ class ResnetEncoder(nn.Module):
     Pytorch module for a resnet encoder
     num_layers: 레즈넷18, 34, 50, 101, 152 중에서 선택
     pretrained: ImageNet pratrained 모델을 불러오는지의 여부
-
     """
     def __init__(self, num_layers, pretrained, num_input_images = 1):
         super(ResnetEncoder, self).__init__()

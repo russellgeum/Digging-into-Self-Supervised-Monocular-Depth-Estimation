@@ -1,7 +1,9 @@
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
-from collections import defaultdict
+
+import os
+import random
 import numpy as np
 from tqdm import tqdm
 
@@ -13,49 +15,64 @@ from torch.utils.data import DataLoader
 from model_logger import *
 from model_parser import *
 from model_utility import *
-from model_dataloader import *
-
 from model_loss import *
 from model_layer import *
+from model_dataloader import *
 
-option_templet1 = ">>> Epoch {0:12d} |   Batch size {1:5d} |   Learning rate {2:0.3f}"
-option_templet2 = ">>> Image Size {0:2d} {1:3d} |   min-max Depth {2:0.2f} {3:0.2f}"
+
+# Templet
+option_templet1 = ">>> Epoch {0:12d} |   Batch size {1:5d} |   Learning rate {2:0.4f} |   Scheduler step {3:5d}"
+option_templet2 = ">>> Image Size {0:3d} {1:3d} |   min-max Depth {2:0.2f} {3:0.2f}"
 option_templet3 = ">>> Train Batch Step {0:3d} Valid Batch Step {1:3d}"
+
+
+# pytorch randomnetss
+def pytorch_randomness(random_seed = 42):
+    torch.backends.cudnn.benchmark = True
+    torch.backends.cudnn.deterministic = False
+    random.seed(random_seed)
+    np.random.seed(random_seed)
+    torch.manual_seed(random_seed)
+    torch.cuda.manual_seed(random_seed)
+    torch.cuda.manual_seed_all(random_seed) # if use multi-GPU
+
+
 class trainer(object):
     def __init__(self, options):
+        pytorch_randomness()
+        self.options          = options
         self.device           = 'cuda:0' if torch.cuda.is_available() else 'cpu'
         self.load_path        = options.load_path
         self.epoch            = options.epoch
         self.batch_size       = options.batch
         self.learning_rate    = options.learning_rate
         self.scheduler_step   = options.scheduler_step
-        # 모델에 입력할 이미지의 해상도와 min depth, max depth 정의
-        self.min_depth        = options.min_depth
+        self.min_depth        = options.min_depth # 모델에 입력할 이미지의 해상도와 min depth, max depth 정의
         self.max_depth        = options.max_depth
 
         # 아래로는 이미지 사이즈와 뎁스 옵션에 대한 정의 (for KITTI)
-        self.frame_ids  = options.frame_ids       # [-2, -1, 0, 1, 2]
-        self.num_frames = len(self.frame_ids)     # len([-2, -1, 0, 1, 2])
+        self.frame_ids        = options.frame_ids    # [-2, -1, 0, 1, 2]
+        self.num_frames       = len(self.frame_ids)  # len([-2, -1, 0, 1, 2])
         if options.pose_frames == "all":
             self.num_pose_frames = self.num_frames
         else:
             self.num_pose_frames = 2
 
-        self.original_scale = (375, 1245)
-        self.default_scale  = (320, 1024)
-        self.scale      = options.scale       # 0, 1, 2, 3 중 하나
-        self.scales     = options.scales      # 스케일의 범위 [0, 1, 2, 3]
-        self.num_scales = len(options.scales) # [0, 1, 2, 3]의 길이는 4
-        self.resolution = [(int(self.default_scale[0]/2**(self.scale+i)), int(self.default_scale[1]/2**(self.scale+i))) \
-                            for i in self.scales]
+        self.original_scale   = (375, 1242)
+        self.default_scale    = (384, 1280)
+        self.scale            = options.scale       # 0, 1, 2, 3 중 하나
+        self.scales           = options.scales      # 스케일의 범위 [0, 1, 2, 3] (현재 지정한 self.scale로부터 시작)
+        self.num_scales       = len(options.scales) # [0, 1, 2, 3]의 길이는 4
+        self.resolution       = [(int(self.default_scale[0]/2**(self.scale+i)), 
+                                  int(self.default_scale[1]/2**(self.scale+i))) \
+                                  for i in self.scales]
 
-        self.height     = self.resolution[0][0]
-        self.width      = self.resolution[0][1]
-        # 프레임 아이디 정의
-        self.train_args = [options.train_path, "train", True, "left", self.num_frames] # 훈련 데이터 args
-        self.valid_args = [options.valid_path, "val", True, "left", self.num_frames] # 검증 데이터 args
+        self.height           = self.resolution[0][0] # 학습에 사용할 4개의 스케일 중 가장 맨 앞 스케일이 모델에 입력
+        self.width            = self.resolution[0][1]
+
+        self.train_args       = [options.train_path, "train", True, "left", self.num_frames]
+        self.valid_args       = [options.valid_path, "val", True, "left", self.num_frames]
     
-
         self.num_layers       = options.num_layers    # 레즈넷 버전 18 or 36 or 50, 디폴트 18
         self.weight_init      = options.weight_init   # "pretrained"
         self.pose_type        = options.pose_type     # 포즈 네트워크 타입 "posecnn", "separate_resnet", shared_resnet"
@@ -63,13 +80,14 @@ class trainer(object):
 
         # 1. train, valid 데이터 로더 로드
         self.train_dataloader, self.valid_dataloader = self.definition_dataloader()
-        print(option_templet1.format(self.epoch, self.batch_size, self.learning_rate))
+        self.train_length, self.valid_length         = len(self.train_dataloader), len(self.valid_dataloader)
+        print("Pose Network type  :", self.pose_type)
+        print(option_templet1.format(self.epoch, self.batch_size, self.learning_rate, self.scheduler_step))
         print(option_templet2.format(self.height, self.width, self.min_depth, self.max_depth))
-        print(option_templet3.format(self.train_dataloader.__len__(), self.valid_dataloader.__len__()))
+        print(option_templet3.format(self.train_length, self.valid_length))
         print(">>> Setting dataloader")
 
-        # 2. 모델과 모델 파라미터를 담을 딕셔너리 및 리스트에 모델을 로드
-        #    BackPropagation과 Project3D를 로드
+        # 2. 모델과 모델 파라미터, BackPropagation과 Project3D를 로드
         self.model      = {}
         self.parameters = []
         self.model, self.parameters = self.definition_model(model_dict = self.model, param_list = self.parameters)
@@ -85,26 +103,30 @@ class trainer(object):
         self.reprojection_loss.to(self.device)
         self.smooth_loss.to(self.device)
 
-        self.model_optimizer    = torch.optim.Adam(self.parameters, self.learning_rate)
-        self.model_scheduler    = torch.optim.lr_scheduler.StepLR(self.model_optimizer, self.scheduler_step, 0.1)
+        self.model_optimizer = torch.optim.Adam(self.parameters, self.learning_rate)
+        self.model_scheduler = torch.optim.lr_scheduler.StepLR(self.model_optimizer, self.scheduler_step)
+        self.depth_metrics   = ["loss", "a1", "a2", "a3", "rmse", "rmse_log", "abs_rel", "sq_rel"]
         print(">>> Setting Loss function & Optimizer")
-
-        self.depth_metrics = ["a1", "a2", "a3", "rmse", "rmse_log", "abs_rel", "sq_rel"]
         print(">>> Setting End")
 
+    
+    ###############################################################################################################
+    ###############################################################################################################
     def definition_dataloader(self): # 키티 데이터를 불러오는 함수
         train_sequence   = GetKITTI(*self.train_args).item()
         valid_sequence   = GetKITTI(*self.valid_args).item()
-        value = 20
-        for key in train_sequence:
-            train_sequence[key] = train_sequence[key][:10 * value]
-        for key in valid_sequence:
-            valid_sequence[key] = valid_sequence[key][:value]
+        # value = 8
+        # for key in train_sequence:
+        #     train_sequence[key] = train_sequence[key][:10 * value]
+        # for key in valid_sequence:
+        #     valid_sequence[key] = valid_sequence[key][:value]
+        train_dataset    = KITTIDataset(train_sequence, True, scale = self.scale, centre = "mid")
+        valid_dataset    = KITTIDataset(valid_sequence, False, scale = self.scale, centre = "mid")
 
-        train_dataset    = KITTIDataset(train_sequence, True)
-        valid_dataset    = KITTIDataset(valid_sequence, False)
-        train_dataloader = DataLoader(train_dataset, self.batch_size, True, drop_last = True)
-        valid_dataloader = DataLoader(valid_dataset, self.batch_size, False, drop_last = True)
+        train_dataloader = DataLoader(train_dataset, self.batch_size, True,
+                drop_last = True, prefetch_factor = self.options.prepetch, num_workers = self.options.num_workers)
+        valid_dataloader = DataLoader(valid_dataset, self.batch_size, False, 
+                drop_last = True, prefetch_factor = self.options.prepetch, num_workers = self.options.num_workers)
         return train_dataloader, valid_dataloader
 
 
@@ -139,13 +161,16 @@ class trainer(object):
         param_list = param_list + list(model_dict["pose_decoder"].parameters())
         return model_dict, param_list
 
+    
+    ###############################################################################################################
+    ###############################################################################################################
+    def model_train(self): # 훈련 루프
+        epoch_train_log = {key: [] for key in self.depth_metrics}
+        epoch_valid_log = {key: [] for key in self.depth_metrics}
 
-
-
-    def model_iteration(self): # 훈련 루프
         for epoch in range(self.epoch):
-            train_loss = {}
-            valid_loss = {}
+            batch_train_log = {key: [] for key in self.depth_metrics}
+            batch_valid_log = {key: [] for key in self.depth_metrics}
 
             self.set_train()
             for _, train_inputs in tqdm(enumerate(self.train_dataloader)):
@@ -154,26 +179,52 @@ class trainer(object):
                 self.model_optimizer.zero_grad()
                 train_loss["loss"].backward()
                 self.model_optimizer.step()
-
-                train_depth_error         = compute_depth_metric(train_inputs, train_outputs)
-                for i, metrics in enumerate(self.depth_metrics):
-                    train_loss[metrics] = np.array(train_depth_error[i].cpu())
+                
+                batch_train_log = self.compute_metric(train_inputs, train_outputs, train_loss, batch_train_log)
             
             self.set_valid()
             for _, valid_inputs in tqdm(enumerate(self.valid_dataloader)):
                 with torch.no_grad():
                     valid_outputs, valid_loss = self.batch_process(valid_inputs)
-
-                    valid_detph_error         = compute_depth_metric(valid_inputs, valid_outputs)
-                    for i, metrics in enumerate(self.depth_metrics):
-                        valid_loss[metrics] = np.array(valid_detph_error[i].cpu())
-
+                    batch_valid_log = self.compute_metric(valid_inputs, valid_outputs, valid_loss, batch_valid_log)
+            
             self.model_scheduler.step()
-            self.model_save(epoch)
-            logger(epoch+1, train_loss, valid_loss)
+            for key in self.depth_metrics:
+                epoch_train_log[key].append(np.mean(batch_train_log[key]))
+                epoch_valid_log[key].append(np.mean(batch_valid_log[key]))
+
+            model_print(epoch, batch_train_log, batch_valid_log)
+            self.model_save(epoch, epoch_train_log, epoch_valid_log)
         print(">>> End Game")
 
 
+    def model_save(self, epoch, train_log, valid_log):
+        save_directory = "./model_save" + "/" + str(self.pose_type)
+        if not os.path.isdir(save_directory):
+            os.makedirs(save_directory)
+        
+        if (epoch+1) % 10 == 0: # epoch가 특정 조건을 만족시키는 조건문
+            # 뎁스 인코더, 디코더 모델 저장
+            torch.save(self.model["encoder"].state_dict(), 
+                    save_directory + "/" + "encoder" + str(epoch+1) + ".pt")
+            torch.save(self.model["decoder"].state_dict(), 
+                    save_directory + "/" + "decoder" + str(epoch+1) + ".pt")
+            
+            # 포즈 디코더 모델 저장 (포즈 인코더가 있다면 인코더도 저장)
+            if self.pose_type == "separate":
+                torch.save(self.model["pose_encoder"].state_dict(), 
+                        save_directory + "/" + "pose_encoder" + str(epoch+1) + ".pt")
+
+            torch.save(self.model["pose_decoder"].state_dict(), 
+                    save_directory + "/" + "pose_decoder" + str(epoch+1) + ".pt")
+
+            for key in train_log: # 모델의 로그 기록 저장
+                np.save(save_directory + "/" + key + str(epoch+1) + ".npy", train_log[key])
+                np.save(save_directory + "/" + key + str(epoch+1) + ".npy", valid_log[key])
+
+
+    ###############################################################################################################
+    ###############################################################################################################
     def batch_process(self, inputs): # 배치 데이터마다 처리
         for key in inputs:
             inputs[key] = inputs[key].to(self.device)
@@ -196,23 +247,20 @@ class trainer(object):
             features = self.model["encoder"](inputs[("color_aug", 0, 0)])
             outputs  = self.model["decoder"](features)
 
-        
         """
         1. color_aug를 으로 추출한 outputs에 disparity뿐만 아니라 R, T, cam2cam 키를 추가
         2. train_inputs, train_outputs를 이용해서 [R|T]를 계산하고 camera_coords -> frame_coords으로 변환
         3. outputs에 스케일마다 인터폴레이트한 뎁스 저장, 
-            스케일마다 프레임 코디네이트 저장,
-            스케일마다 그리드 샘플링한 이미지 저장 (소스 이미지를 타겟 좌표 관점에서 바라본 것)
+           스케일마다 프레임 코디네이트 저장,
+           스케일마다 그리드 샘플링한 이미지 저장 (소스 이미지를 타겟 좌표 관점에서 바라본 것)
         """
-        # outputs에 "R", "T", "cam2cam" 키를 가지고 나옴
         inputs, outputs = self.compute_pose(inputs, outputs, features)
-        # outputs에 "depth", "frame_coords", "warping_color" 키를 가지고 나옴
         inputs, outputs = self.compute_depth(inputs, outputs)
         loss            = self.compute_loss(inputs, outputs)
         return outputs, loss
 
 
-    def compute_pose(self, inputs, outputs, features):
+    def compute_pose(self, inputs, outputs, features): # 포즈 계산
         """
         포즈를 계산하는 함수
         프레임 아이디가 [0, -2, -1, 1, 2] 이면 [-2, -1, 1, 2]를 순회해서
@@ -223,6 +271,7 @@ class trainer(object):
         if self.num_pose_frames == 2:
             if self.pose_type == "posecnn":
                 all_frames = {frame_id: inputs[("color_aug", frame_id, 0)] for frame_id in self.frame_ids}
+
                 for frame_id in self.frame_ids:
                     if frame_id < 0:
                         pose_inputs = torch.cat([all_frames[frame_id], all_frames[0]], dim = 1)
@@ -239,6 +288,7 @@ class trainer(object):
 
             elif self.pose_type == "shared":
                 all_features = {frame_id: features[frame_id] for frame_id in self.frame_ids}
+
                 for frame_id in self.frame_ids:
                     if frame_id < 0:
                         pose_inputs = [all_features[frame_id], all_features[0]]
@@ -255,6 +305,7 @@ class trainer(object):
 
             elif self.pose_type == "separate":
                 all_frames = {frame_id: inputs[("color_aug", frame_id, 0)] for frame_id in self.frame_ids}
+
                 for frame_id in self.frame_ids:
                     if frame_id < 0:
                         pose_inputs = torch.cat([all_frames[frame_id], all_frames[0]], dim = 1)
@@ -291,12 +342,11 @@ class trainer(object):
                 outputs[("T", frame_id, 0)]   = translation
                 outputs[("c2c", frame_id, 0)] = param2matrix(
                                                     axisangle = axisangle[:, index], 
-                                                    translation = translation[:, index],
-                                                    invert = (frame_id < 0))
-        return inputs, outputs
+                                                    translation = translation[:, index])
+        return inputs, outputs  # outputs에 "R", "T", "cam2cam" 키를 가지고 나옴
         
 
-    def compute_depth(self, inputs, outputs):
+    def compute_depth(self, inputs, outputs): # 뎁스 계산
         """
         1. 추정한 pose와 disparity로 depth 및 warping image를 계산 (source_scale = 0 -> (320, 1024)를 의미)
         2. 4개 스케일의 디스패리티 맵을 source_scale (원래 이미지 크기) 로 interpolate
@@ -306,14 +356,13 @@ class trainer(object):
         """
         default_scale = 0
         for scale in self.scales:
-            # frame_id == 0에 대한 disp, 디코더의 다양한 스케일의 disp를 통해 원본 사이즈 뎁스 맵을 추정
-            # 어떤 scale의 disp를 depth로 변환하고 해당 scale 키로 저장
+            # frame_id == 0인 프레임에 해당하는 여러 스케일의 disp로 원본 사이즈 뎁스를 추정
+            # 어떤 scale의 disp를 depth로 변환하고 corresponding scale 키로 저장
             disparity = outputs[("disp", scale)]
             disparity = F.interpolate(disparity, [self.height, self.width], mode = "bilinear", align_corners = False)
             _, depth  = disparity2depth(disparity, self.min_depth, self.max_depth)
-            outputs[("depth", 0, scale)] = depth
-            print(disparity)
-            for frame_id in self.frame_ids[1: ]: # 0을 제외하고 [-2, -1, 1, 2] or [-1, 1]
+            outputs[("depth", 0, scale)] = depth # saving depth for depth eval
+            for frame_id in self.frame_ids[1: ]: # 0을 제외하고 [-2, -1, 1, 2] or [-1 ,1] etc ...
                 """
                 Ps ~ KTDK^-1Pt
                 0. R, T를 이용하여 transformation 행렬 계산
@@ -338,16 +387,16 @@ class trainer(object):
 
                 camera_coords  = self.backward_project(depth, inputs[("inv_K", default_scale)])
                 frame_coords   = self.forward_project(camera_coords, inputs[("K", default_scale)], transformation)
-                outputs[("warped_frame", frame_id, scale)] = frame_coords
+                # outputs[("warped_frame", frame_id, scale)] = frame_coords
                 outputs[("warped_color", frame_id, scale)] = F.grid_sample(
                                                                 inputs[("color", frame_id, default_scale)],
-                                                                outputs[("warped_frame", frame_id, scale)],
+                                                                frame_coords,
                                                                 padding_mode = "border",
-                                                                align_corners = True)
-        return inputs, outputs
+                                                                align_corners = False)
+        return inputs, outputs # outputs에 "depth", warped_color" 키를 가지고 나옴
 
 
-    def compute_loss(self, inputs, outputs):
+    def compute_loss(self, inputs, outputs): # 로스 계산
         """
         타겟 이미지, 와핑 이미지를 가지고 로스를 계산하는 함수
         1. 스케일 리스트를 돌면서 scale: 0, 1, 2, 3에 대한 뎁스 계산
@@ -375,7 +424,7 @@ class trainer(object):
             scale_loss     = 0
             disparity      = outputs[("disp", scale)]            # 다양한 사이즈의 스케일 (4개)
             target_scale   = inputs[("color", 0, scale)]         # 다양한 사이즈의 스케일 (4개)
-            target_default = inputs[("color", 0, default_scale)]  # scale = 0의 타겟 이미지
+            target_default = inputs[("color", 0, default_scale)] # scale = 0의 타겟 이미지
             
             # target과 warping 이미지에 대해서 reprojection_loss 계산
             reproejction_loss = []
@@ -394,26 +443,40 @@ class trainer(object):
                     no_reproejction_loss.append(no_warping_loss)
                 no_reproejction_loss = torch.cat(no_reproejction_loss, 1)
                 
-                randn = 0.001 * torch.randn(no_reproejction_loss.shape).to(self.device)
+                randn = 1e-7 * torch.randn(no_reproejction_loss.shape).to(self.device)
                 no_reproejction_loss = no_reproejction_loss + randn
                 combined_loss        = torch.cat((no_reproejction_loss, reproejction_loss), dim = 1)
 
             if combined_loss.shape[0] == 1:
                 selected_reproejction = combined_loss
             else:
-                selected_reproejction, idxs = torch.min(combined_loss, dim = 1)
+                selected_reproejction, _ = torch.min(combined_loss, dim = 1)
+            selected_reproejction = selected_reproejction.mean()
 
-            # disparity와 color로 smooth loss 계산
-            smooth_loss = self.smooth_loss(disp = disparity, color = target_scale)
-
-            scale_loss  = scale_loss + selected_reproejction.mean() + smooth_loss
-            total_loss  = total_loss + scale_loss
+            # 각 스케일의 이미지와 disparity로 smooth_loss를 계산
+            smooth_loss = self.smooth_loss(disp = disparity, color = target_scale) # disparity와 color로 smooth loss 계산
+            
+            # Loss summation
+            scale_loss = scale_loss + 0.01 * smooth_loss / (2**scale)
+            scale_loss = scale_loss + selected_reproejction
+            total_loss = total_loss + scale_loss
         
         total_loss        = total_loss / self.num_scales
         loss_dict["loss"] = total_loss
         return loss_dict
 
 
+    def compute_metric(self, inputs, outputs, loss, log_dict): # 메트릭 계산
+        log_dict["loss"].append(loss["loss"].detach().cpu().numpy())
+
+        depth_errors = compute_depth_metric(inputs, outputs)
+        for index, metric in enumerate(self.depth_metrics[1:]):
+            log_dict[metric].append(depth_errors[index].cpu().numpy())
+        return log_dict
+
+    
+    ###############################################################################################################
+    ###############################################################################################################
     def set_train(self): # 훈련 모드
         for m in self.model.values():
             m.train()
@@ -422,19 +485,8 @@ class trainer(object):
         for m in self.model.values():
             m.eval()
 
-    def model_save(self, epoch):
-        if (epoch+1) % 10 == 0:
-            torch.save(self.model["encoder"].state_dict(), "./model_save/encoder" + str(epoch+1) + ".pt")
-            torch.save(self.model["decoder"].state_dict(), "./model_save/decoder" + str(epoch+1) + ".pt")
-            if self.pose_type == "separate":
-                torch.save(self.model["pose_encoder"].state_dict(), "./model_save/pose_encoder" + str(epoch+1) + ".pt")
-            torch.save(self.model["pose_decoder"].state_dict(), "./model_save/pose_decoder" + str(epoch+1) + ".pt")
-
-    def train(self):
-        self.model_iteration()
-
 
 if __name__ == "__main__":
-    args  = main()
+    args    = main()
     TRAINER = trainer(options = args)
-    TRAINER.train()
+    TRAINER.model_train()

@@ -1,18 +1,53 @@
 # -*- coding: utf-8 -*-
 import os
+import re
+import sys
+import uuid
 import numpy as np
+from scipy import misc
 from collections import Counter
 
 import torch
+import torch.nn as nn
+from PIL import Image
 import matplotlib.pyplot as plt
 
 
-"""
-포인트 클라우드로부터 뎁스 맵을 추출하는 모듈이 있거나, 그외 여러가지 유틸리티 모음
-"""
+
+
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+KITTI 데이터셋을 위한 함수 모듈
+def load_velodyne_points
+def read_calib_file
+def sub2ind
+def Point2Depth
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+def read_cam2cam(calib_path):
+    data = {}
+    with open(calib_path, "r") as f:
+        for line in f.readlines():
+            key, value = line.split(":", 1)
+            try:
+                data[key] = np.array([float(x) for x in value.split()])
+            except ValueError:
+                pass   
+
+    P_rect_02 = np.reshape(data['P_rect_02'], (3, 4))
+    P_rect_03 = np.reshape(data['P_rect_03'], (3, 4))
+    intrinsic_left =  P_rect_02[:3, :3]
+    intrinsic_right = P_rect_03[:3, :3]
+    
+    identity_l  = np.eye(4)
+    identity_r  = np.eye(4)
+    identity_l[:3, :3] = intrinsic_left
+    identity_r[:3, :3] = intrinsic_right
+    identity_l = identity_l.astype(np.float32)
+    identity_r = identity_r.astype(np.float32)
+    return identity_l, identity_r
+
+
 def load_velodyne_points(filename):
     """
-    벨로다인 포인트 클라우드 파일을 읽어들이는 함수
     Load 3D point cloud from KITTI file format
     (adapted from https://github.com/hunse/kitti)
     """
@@ -21,7 +56,7 @@ def load_velodyne_points(filename):
     return points
 
 
-def read_calib_file(path):
+def read_velo2cam(path):
     """
     벨로다인 캘리브레이션 파일을 읽어들이는 함수
     Read KITTI calibration file
@@ -41,7 +76,6 @@ def read_calib_file(path):
                 except ValueError:
                     # casting error: data[key] already eq. value, so pass
                     pass
-
     return data
 
 
@@ -70,62 +104,46 @@ def Point2Depth(velo2cam_path, cam2cam_path, point_path, cam = 2, vel_depth = Tr
     np.min ~ 0
     shape: [375, 1242]
     """
-    """
-    1. load calibration files
-    """
-    cam2cam  = read_calib_file(os.path.join(cam2cam_path))
-    velo2cam = read_calib_file(os.path.join(velo2cam_path))
+
+    # 1. load calibration files
+    cam2cam  = read_velo2cam(os.path.join(cam2cam_path))
+    velo2cam = read_velo2cam(os.path.join(velo2cam_path))
     velo2cam = np.hstack((velo2cam['R'].reshape(3, 3), velo2cam['T'][..., np.newaxis]))
     velo2cam = np.vstack((velo2cam, np.array([0, 0, 0, 1.0])))
 
-    """
-    2. 이미지 모양을 획득 (375, 1242)
-    """
+    # 2. 이미지 모양을 획득 (375, 1242)
     im_shape = cam2cam["S_rect_02"][::-1].astype(np.int32)
     
-
-    """
-    3.
-    3차원 포인트 점을 카메라 좌표계로 변환하고 다시 K를 곱해서 이미지로 사영시키는 수식
-    먼저 4x4 항등행렬을 선언하고 여기서 3x3 부분은 회전 행렬을 붙인다. (R_rect_00)
-    그리고 모션 벡터를 cam2cam의 P_rect_0 성분을 불러와서 둘을 np.dot한다.
-    마지막으로 velo2cam 매트릭스를 np.dot하면 벨로다인 포인트 -> 이미지로 사영하는 매트릭스를 만듬
-    """
+    # 3.
+    # 3차원 포인트 점을 카메라 좌표계로 변환하고 다시 K를 곱해서 이미지로 사영시키는 수식
+    # 먼저 4x4 항등행렬을 선언하고 여기서 3x3 부분은 회전 행렬을 붙인다. (R_rect_00)
+    # 그리고 모션 벡터를 cam2cam의 P_rect_0 성분을 불러와서 둘을 np.dot한다.
+    # 마지막으로 velo2cam 매트릭스를 np.dot하면 벨로다인 포인트 -> 이미지로 사영하는 매트릭스를 만듬
     R_cam2rect = np.eye(4)                                  # 4x4 항등행렬
     R_cam2rect[:3, :3] = cam2cam['R_rect_00'].reshape(3, 3) # 회전 운동
     P_rect = cam2cam['P_rect_0'+str(cam)].reshape(3, 4)     # 모션 벡터
     P_velo2im = np.dot(np.dot(P_rect, R_cam2rect), velo2cam)
 
-    
-    """
-    4.
-    벨로다인 포인트 클라우드를 불러오고, x, y, z, 1의 homogenous 좌표계로 만듬
-    load velodyne points and remove all behind image plane (approximation)
-    each row of the velodyne data is forward, left, up, reflectance
-    """
+    # 4.
+    # 벨로다인 포인트 클라우드를 불러오고, x, y, z, 1의 homogenous 좌표계로 만듬
+    # load velodyne points and remove all behind image plane (approximation)
+    # each row of the velodyne data is forward, left, up, reflectance
     velo = load_velodyne_points(point_path)
     velo = velo[velo[:, 0] >= 0, :]
 
-
-    """
-    5.
-    벨로다인 포인트 homogenous 값을 카메라의 이미지 좌표에 사영하는 계산과정 이미지 = 사영행렬 * 3차원 벨로다인 포인트
-    """
+    # 5. 벨로다인 포인트 homogenous 값을 카메라의 이미지 좌표에 사영하는 계산과정 이미지 = 사영행렬 * 3차원 벨로다인 포인트
     velo_pts_im        = np.dot(P_velo2im, velo.T).T
     velo_pts_im[:, :2] = velo_pts_im[:, :2] / velo_pts_im[:, 2][..., np.newaxis] # shape is (포인트 갯수, x, y, 1 값)
 
     if vel_depth:
         velo_pts_im[:, 2] = velo[:, 0]
 
-
-    """
-    check if in bounds
-    use minus 1 to get the exact same value as KITTI matlab code
-    1. velo_path_im.shape는 3개 (x, y, 1) 성분이 61021개 있다. 여기의 x, y 좌표에서 1씩 빼준 것을 다시 velo_pts_im[:, 0] and [:, 1]에 대입
-    2. 그리고 x 좌표가 0 이상이고 y 좌표가 0 이상인 값만 유효한 인덱스로 취급한다.
-    3. 그리고 val_ind 이면서 동시에 velo_pts_im 좌표의 위치가 이미지의 크기보다 작은 것만 다시 val_inds로 할당 (그래야만 이미지에 좌표가 잘 맺히므로)
-    4. 마지막으로 그 유효한 좌표의 위치, 즉 True만 velo_pts_im로 취급
-    """
+    # check if in bounds
+    # use minus 1 to get the exact same value as KITTI matlab code
+    # 1. velo_path_im.shape는 3개 (x, y, 1) 성분이 61021개 있다. 여기의 x, y 좌표에서 1씩 빼준 것을 다시 velo_pts_im[:, 0] and [:, 1]에 대입
+    # 2. 그리고 x 좌표가 0 이상이고 y 좌표가 0 이상인 값만 유효한 인덱스로 취급한다.
+    # 3. 그리고 val_ind 이면서 동시에 velo_pts_im 좌표의 위치가 이미지의 크기보다 작은 것만 다시 val_inds로 할당 (그래야만 이미지에 좌표가 잘 맺히므로)
+    # 4. 마지막으로 그 유효한 좌표의 위치, 즉 True만 velo_pts_im로 취급
     velo_pts_im[:, 0] = np.round(velo_pts_im[:, 0]) - 1
     velo_pts_im[:, 1] = np.round(velo_pts_im[:, 1]) - 1
     val_inds          = (velo_pts_im[:, 0] >= 0) & (velo_pts_im[:, 1] >= 0)
@@ -135,12 +153,7 @@ def Point2Depth(velo2cam_path, cam2cam_path, point_path, cam = 2, vel_depth = Tr
     depth = np.zeros((im_shape[:2])) # 이미지로 사영, 375, 1245 사이즈의 zero map을 만듬
     depth[velo_pts_im[:, 1].astype(np.int), velo_pts_im[:, 0].astype(np.int)] = velo_pts_im[:, 2]
 
-    
-    """
-    마지막
-    find the duplicate points and choose the closest depth
-    중복된 값을 제거
-    """
+    # 마지막, 중복된 값을 제거
     inds = sub2ind(depth.shape, velo_pts_im[:, 1], velo_pts_im[:, 0])
     dupe_inds = [item for item, count in Counter(inds).items() if count > 1]
     for dd in dupe_inds:
@@ -153,36 +166,56 @@ def Point2Depth(velo2cam_path, cam2cam_path, point_path, cam = 2, vel_depth = Tr
     return depth
 
 
-#################################################################################################################################################
-# ################################################################################################################################################
-def tensor2numpy(tensor):
+
+
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+기타 모듈
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+def tensor2numpy(tensor): # 토치 텐서를 넘파이로
     return tensor.numpy()
 
 
-def numpy2tensor(numpy):
+def numpy2tensor(numpy): # 넘파이를 토치 텐서로
     return torch.from_numpy(numpy)
 
 
-def show_image(image, option = "torch", size = (10, 4), cmap = "magma"):
-    plt.rcParams["figure.figsize"] = size
+def parameter_number(model): # 모델의 파라미터를 계산하는 함수
+    num_params = 0
+    for tensor in list(model.parameters()):
+        tensor      = tensor.view(-1)
+        num_params += len(tensor)
+    print(num_params)
+
+
+def sample_dataset(dataloader): # 모델 데이터로터에서 배치 샘플 하나를 추출
+    test = 0
+    for index, data in enumerate(dataloader):
+        test = data
+        if index == 0:
+            break  
+    return test
+
+
+def show_image(image, option = "torch", size = (10, 4), cmap = "magma", show_disp = True):
     """
     토치나 텐서플로우 형태의 이미지를 받아서 이미지를 띄우는 함수
     Args: tensor type
-        Pytorch:    [B, N, H, W]
-        Tensorflow: [B, H, W, C]
+            Pytorch:    [B, N, H, W]
+            Tensorflow: [B, H, W, C]
     """
+    plt.rcParams["figure.figsize"] = size
 
     if option == "torch":
-        if len(image.shape) == 3:
+        if image.shape[0] == 3 or len(image.shape) == 3:
             image = np.transpose(image, (1, 2, 0))
-        elif len(image.shape) == 4:
+        else:
             image = np.squeeze(image, axis = 0)
             image = np.transpose(image, (1, 2, 0))
 
     elif option == "tensorflow": # N H W C
         if len(image.shape) == 3:
             pass
-        elif len(image.shape) == 4:
+        else:
             image = np.squeeze(image, axis = 3)
 
     """
@@ -190,13 +223,34 @@ def show_image(image, option = "torch", size = (10, 4), cmap = "magma"):
     따리서 255.로 나누어 주는 것이 중요
     그리고 cv2.imread로 불러온 이미지를 plt.imshow로 띄울때는 cv2.COLOR_BGR2RGB
     """
-    plt.imshow(image, cmap = cmap, vmax = np.percentile(image, 95))
+    if show_disp:
+        plt.imshow(image, cmap = cmap, vmax = np.percentile(image, 95))
+        plt.show()
+        plt.axis('off')
+    else:
+        plt.imshow(image, cmap = cmap)
+        plt.show()
+        plt.axis('off')
+
+
+def one_graph(data, xlabel, ylabel, title, color, marker, linestyle):
+    """
+    data: np.array
+    xlabel: str
+    ylabel: str
+    title: str
+    color: str
+    marker: "o" or 
+    """
+    plt.rcParams["figure.figsize"] = (10, 6)
+    plt.rcParams['lines.linewidth'] = 1.5
+    plt.rcParams['axes.grid'] = True 
+    plt.rc('font', size = 10)        # 기본 폰트 크기
+    plt.rc('axes', labelsize = 15)   # x,y축 label 폰트 크기
+    plt.rc('figure', titlesize = 15) # figure title 폰트 크기
+
+    plt.xlabel(xlabel)
+    plt.ylabel(ylabel)
+    plt.title(title)
+    plt.plot(data, c = color, marker = marker, linestyle = linestyle)
     plt.show()
-    
-def sample_dataset(dataloader):
-    sample = 0
-    for index, data in enumerate(dataloader):
-        sample = data
-        if index == 0:
-            break
-    return sample

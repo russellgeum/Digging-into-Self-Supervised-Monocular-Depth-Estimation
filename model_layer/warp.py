@@ -6,9 +6,8 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional  as F
-"""
-Following up https://github.com/nianticlabs/monodepth2/tree/master/networks
-"""
+
+
 def disparity2depth(disparity, min_depth, max_depth):
     """
     disparity, min_depth, max_depth를 받아서 depth를 계산한다.
@@ -59,7 +58,7 @@ def angle2rotation(anlge_axis): # anlge_axis == (Ux, Uy, Uz)
     에서 Rotation matrix from axis and angle 참조, 수식의 근거는 Rodriguess rotation formula에 근거
     """
     angle = torch.linalg.norm(anlge_axis, ord = 2, dim = 2, keepdim = True) # angle axis에 대한 이해가 있다면 문제되지 않음
-    axis  = anlge_axis / (angle + 1e-7)
+    axis  = anlge_axis / (angle + 1e-5)
     
     """
     입력 형태가 각도가 아닌 실수 형태
@@ -103,51 +102,21 @@ def angle2rotation(anlge_axis): # anlge_axis == (Ux, Uy, Uz)
     return rotation
 
 
-# def param2matrix(axisangle, translation, invert = False):
-#     """
-#     args:
-#         axisangle:   [N, 1, 3]
-#         translation: [N, 1, 3]
-#         이때 3개의 성분은 각각 (rx, ry, rz), (tx, ty, tz)
-
-#     return
-#         transformation_matrix: [B, 4, 4]
-
-#     invert = True이면 역행렬을 계산하는 것
-#     타겟 프레임보다 소스 프레임이 앞에 있어서 뷰를 뒤로 옮기는 것
-#     invert = False이면 역행렬을 구하지 않는 것
-#     타겟 프레임보다 소스 프레임이 뒤에 있어서 뷰를 앞으로 옮기는 것
-#     """
-#     R = angle2rotation(axisangle) # axisangle = [N, 1, 3]   -> R = [N, 4, 4]
-#     t = translation.clone()       # translation = [N, 1, 3] -> T = [N, 4, 4]
-
-#     if invert:
-#         R = R.transpose(1, 2)
-#         t = t * (-1)         
-#         T = vector2translation(t)
-#         matrix = torch.matmul(R, T)
-
-#     else:
-#         T = vector2translation(t)
-#         matrix = torch.matmul(T, R)
-#     return matrix
-
-
 def param2matrix(axisangle, translation, invert=False):
-    #     """
-    #     args:
-    #         axisangle:   [N, 1, 3]
-    #         translation: [N, 1, 3]
-    #         이때 3개의 성분은 각각 (rx, ry, rz), (tx, ty, tz)
-        
-    #     return
-    #         transformation_matrix: [B, 4, 4]
-        
-    #     invert = True이면 역행렬을 계산하는 것
-    #     타겟 프레임보다 소스 프레임이 앞에 있어서 뷰를 뒤로 옮기는 것
-    #     invert = False이면 역행렬을 구하지 않는 것
-    #     타겟 프레임보다 소스 프레임이 뒤에 있어서 뷰를 앞으로 옮기는 것
-    #     """
+    """
+    args:
+        axisangle:   [N, 1, 3]
+        translation: [N, 1, 3]
+        이때 3개의 성분은 각각 (rx, ry, rz), (tx, ty, tz)
+    
+    return
+        transformation_matrix: [B, 4, 4]
+    
+    invert = True이면 역행렬을 계산하는 것
+    타겟 프레임보다 소스 프레임이 앞에 있어서 뷰를 뒤로 옮기는 것
+    invert = False이면 역행렬을 구하지 않는 것
+    타겟 프레임보다 소스 프레임이 뒤에 있어서 뷰를 앞으로 옮기는 것
+    """
     R = angle2rotation(axisangle)
     t = translation.clone()
     if invert:
@@ -265,14 +234,14 @@ class PointCloud2Pixel(nn.Module):
         self.width      = width
         self.eps        = eps
     
-    def forward(self, point_clouds, intrinsic_matrix, transformation_matrix):
+    def forward(self, camera_coords, intrinsic_matrix, transformation_matrix):
         projection    = torch.matmul(intrinsic_matrix, transformation_matrix)[:, :3, :]
-        camera_coords = torch.matmul(projection, point_clouds)
+        camera_coords = torch.matmul(projection, camera_coords)
 
         pixel_coords  = camera_coords[:, :2, :] / (camera_coords[:, 2, :].unsqueeze(1) + self.eps)
         pixel_coords  = pixel_coords.view(self.batch_size, 2, self.height, self.width)
         pixel_coords  = pixel_coords.permute(0, 2, 3, 1)
         pixel_coords[..., 0] /= self.width - 1
         pixel_coords[..., 1] /= self.height - 1
-        pixel_coords = (pixel_coords - 0.5) * 2
+        pixel_coords  = (pixel_coords - 0.5) * 2
         return pixel_coords

@@ -1,4 +1,3 @@
-from .kitti import KITTI
-from .kitti import KITTIRawDataset
 from .kitti import GetKITTI
-from .loader import KITTIDataset
+from .kitti import KITTIRawDataset
+from .kitti_loader import KITTIDataset

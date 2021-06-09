@@ -5,9 +5,9 @@ from __future__ import print_function
 import torch
 import torch.nn as nn
 from collections import OrderedDict
-"""
-Following up https://github.com/nianticlabs/monodepth2/tree/master/networks
-"""
+
+
+
 class PoseDecoder(nn.Module):
     def __init__(self, num_ch_enc, num_input_features, num_frames_to_predict_for=None, stride=1):
         '''

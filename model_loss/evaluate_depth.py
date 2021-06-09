@@ -15,9 +15,8 @@ from model_layer import *
 cv2.setNumThreads(0)
 splits_dir = os.path.join(os.path.dirname(__file__), "splits")
 STEREO_SCALE_FACTOR = 5.4
-"""
-Following up https://github.com/nianticlabs/monodepth2/tree/master/networks
-"""
+
+
 def compute_depth_error(ground_truth, prediction):
     """
     추정한 뎁스와 GT의 차이를 계산
@@ -27,9 +26,9 @@ def compute_depth_error(ground_truth, prediction):
     """
     threshold = torch.maximum((ground_truth / prediction), (prediction / ground_truth))
     
-    a1        = threshold[(threshold < 1.25     )].mean()
-    a2        = threshold[(threshold < 1.25 ** 2)].mean()
-    a3        = threshold[(threshold < 1.25 ** 3)].mean()
+    a1        = (threshold < 1.25     ).float().mean()
+    a2        = (threshold < 1.25 ** 2).float().mean()
+    a3        = (threshold < 1.25 ** 3).float().mean()
 
     rmse      = (ground_truth - prediction) ** 2
     rmse      = torch.sqrt(rmse.mean())
@@ -38,7 +37,7 @@ def compute_depth_error(ground_truth, prediction):
     rmse_log  = torch.sqrt(rmse_log.mean())
 
     abs_rel   = torch.mean(torch.abs(ground_truth - prediction) / ground_truth)
-    sqrt_rel  = torch.mean(((ground_truth - prediction) ** 2) / ground_truth)
+    sqrt_rel  = torch.mean((ground_truth - prediction) ** 2 / ground_truth)
 
     return a1, a2, a3, rmse, rmse_log, abs_rel, sqrt_rel
 
@@ -62,7 +61,7 @@ def compute_depth_metric(inputs, outputs):
     """
     predict_depth = outputs[("depth", 0, 0)]
     predict_depth = torch.clamp(
-        F.interpolate(predict_depth, [375, 1245], mode = "bilinear", align_corners = False), 1e-3, 80)
+        F.interpolate(predict_depth, [375, 1242], mode = "bilinear", align_corners = False), 1e-3, 80)
     predict_depth = predict_depth.detach()
     
     # Ground Truth
@@ -70,7 +69,7 @@ def compute_depth_metric(inputs, outputs):
     mask          = ground_depth > 0
 
     crop_mask     = torch.zeros_like(mask)
-    crop_mask[:, :, 175:315, 44:980] = 1
+    crop_mask[:, :, 153:371, 44:1197] = 1
     mask          = mask * crop_mask
 
     ground_depth  = ground_depth[mask]
@@ -82,13 +81,13 @@ def compute_depth_metric(inputs, outputs):
     return detph_error
 
 
-def pose_process_disparity(l_disp, r_disp):
-    """
-    1. 어떤 함수인지 잘 모르겠음
-    """
-    _, h, w = l_disp.shape
-    m_disp  = 0.5 * (l_disp + r_disp)
-    l, _    = np.meshgrid(np.linsapce(0, 1, w), np.linspace(0, 1, h))
-    l_mask  = (1.0 - np.clip(20 * (l - 0.05), 0, 1))[None, ...]
-    r_mask  = l_mask[:, :, ::-1]
-    return r_mask * l_disp + l_mask * r_disp + (1.0 - l_mask - r_mask) * m_disp
+# def pose_process_disparity(l_disp, r_disp):
+#     """
+#     1. 어떤 함수인지 잘 모르겠음
+#     """
+#     _, h, w = l_disp.shape
+#     m_disp  = 0.5 * (l_disp + r_disp)
+#     l, _    = np.meshgrid(np.linsapce(0, 1, w), np.linspace(0, 1, h))
+#     l_mask  = (1.0 - np.clip(20 * (l - 0.05), 0, 1))[None, ...]
+#     r_mask  = l_mask[:, :, ::-1]
+#     return r_mask * l_disp + l_mask * r_disp + (1.0 - l_mask - r_mask) * m_disp

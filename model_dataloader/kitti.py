@@ -3,72 +3,75 @@ import numpy as np
 from natsort import natsorted
 
 
-class KITTI(object):
-    def __init__(self, path):
-        """
-        Args:
-        path: "./dataset/raw_images/train" or "./dataset/raw_image/val"
-              키티 데이터 폴더가 들어있는 train or val 경로를 입력
-        이 클래스는 train 또는 val 폴더 경로를 입력 받으면,
-        그 안의 l 이미지, r 이미지, LiDAR 이미지의 파일 명들을 딕셔너리로 반환한다.
 
-        def search
-            return:
-                dict = {"1":
-                            {"l": [이미지1, 이미지2, 이미지3, 이미지4, 이미지5 ... ...],
-                             "r": [이미지1, 이미지2, 이미지3, 이미지4, 이미지5 ... ...],
-                             "p": [이미지2, 이미지3, 이미지4]
-                            }
-                        }
+# class KITTI(object):
+#     def __init__(self, path):
+#         """
+#         Args:
+#             path: "./dataset/kitti/raw_images/train" or "./dataset/kitti/raw_image/val"
+#             키티 데이터 폴더가 들어있는 train or val 경로를 입력
+#             이 클래스는 train 또는 val 폴더 경로를 입력 받으면,
+#             그 안의 l 이미지, r 이미지, LiDAR 이미지의 파일 명들을 딕셔너리로 반환
+
+#         def search
+#             return:
+#                 dict = {"1":
+#                             {"l": [name1, name2, name3, name4, name5 ... ...],
+#                              "r": [name1, name2, name3, name4, name5 ... ...],
+#                              "p": [name2, name3, name4]
+#                             }
+#                         }
         
-        이러한 형태로 반환하는 이유는 이미지는 l, r의 pair가 정확하게 맞지만,
-        포인트 클라우드 데이터는 때때로 안 맞는 인덱싱이 존재해서 향후 핸들링의 편의를 위함이다.
-        """
-        self.path   = path
-        self.l_path = "image_02/data"
-        self.r_path = "image_03/data"
-        self.p_path = "velodyne_points/data"
+#         이러한 형태로 반환하는 이유는 이미지는 l, r의 pair가 정확하게 맞지만,
+#         포인트 클라우드 데이터는 싱크가 안 맞는 timestamp가 존재해서 향후 핸들링의 편의를 위함
+#         """
+#         self.path   = path
+#         self.l_path = "image_02/data"
+#         self.r_path = "image_03/data"
+#         self.p_path = "velodyne_points/data"
 
-    def search(self):
-        dataname_dict = {}
 
-        for index, yyyy_mm_dd in enumerate(os.listdir(self.path)):
-            category = str(index+1)
-            dataname_dict[category]      = {}
-            dataname_dict[category]["l"] = []
-            dataname_dict[category]["r"] = []
-            dataname_dict[category]["p"] = []
+#     def search(self):
+#         dataname_dict = {}
 
-            for filename in os.listdir(self.path + "/" + yyyy_mm_dd + "/" + self.l_path):
-                dataname_dict[category]["l"].append(filename)
+#         for index, yyyy_mm_dd in enumerate(os.listdir(self.path)):
+#             category = str(index+1)
+#             dataname_dict[category]      = {}
+#             dataname_dict[category]["l"] = []
+#             dataname_dict[category]["r"] = []
+#             dataname_dict[category]["p"] = []
 
-            for filename in os.listdir(self.path + "/" + yyyy_mm_dd + "/" + self.r_path):
-                dataname_dict[category]["r"].append(filename)
+#             for filename in os.listdir(self.path + "/" + yyyy_mm_dd + "/" + self.l_path):
+#                 dataname_dict[category]["l"].append(filename)
 
-            for filename in os.listdir(self.path + "/" + yyyy_mm_dd + "/" + self.p_path):
-                dataname_dict[category]["p"].append(filename)
+#             for filename in os.listdir(self.path + "/" + yyyy_mm_dd + "/" + self.r_path):
+#                 dataname_dict[category]["r"].append(filename)
+
+#             for filename in os.listdir(self.path + "/" + yyyy_mm_dd + "/" + self.p_path):
+#                 dataname_dict[category]["p"].append(filename)
         
-        """
-        return test
-        index = 3
-        print(len(dataset[str(index)]["l"]))
-        print(len(dataset[str(index)]["r"]))
-        print(len(dataset[str(index)]["p"]))
+#         """
+#         return test
+#         index = 3
+#         print(len(dataset[str(index)]["l"]))
+#         print(len(dataset[str(index)]["r"]))
+#         print(len(dataset[str(index)]["p"]))
 
-        print(dataset[str(index)]["l"][100])
-        print(dataset[str(index)]["r"][100])
-        print(dataset[str(index)]["p"][100])
-        """
-        return dataname_dict
+#         print(dataset[str(index)]["l"][100])
+#         print(dataset[str(index)]["r"][100])
+#         print(dataset[str(index)]["p"][100])
+#         """
+#         return dataname_dict
+
 
 
 class KITTIRawDataset(object):
     def __init__(self, path, use_point):
         """
         Args:
-        path: "./dataset/raw_images/train"
+        path: "./dataset/kitti/raw_images/train"
               or 
-              "./dataset/raw_image/val"
+              "./dataset/kitti/raw_image/val"
               키티 데이터 폴더가 들어있는 train or val 경로를 입력
 
         use_point: 포인트 클라우드 데이터르 포함한다면 포인트 클라우드 인덱싱에 맞춘다.
@@ -76,13 +79,12 @@ class KITTIRawDataset(object):
                    그것을 명시하는 기준
 
         return
-        mono_sequence = {"image": [(이미지1, 이미지2), (이미지2, 이미지3), (이미지3, 이미지4) ...]
-                         "point": [(이미지1의 포인트, velo2cam 경로, cam2cam 경로),
-                                    이미지2의 포인트, vwlo2cam 경로, cam2cam 경로),]
+        mono_sequence = {"image": [(name1, name2), (name2, name3), (name3, name4) ...]
+                         "point": [(name1의 포인트, velo2cam 경로, cam2cam 경로),
+                                    name2의 포인트, velo2cam 경로, cam2cam 경로),]
             
         """
         self.path       = path
-        
         self.use_point  = use_point # True or Fals
         self.l_path     = "image_02/data"
         self.r_path     = "image_03/data"
@@ -109,15 +111,15 @@ class KITTIRawDataset(object):
             "l" : 왼쪽 이미지
             "r" : 오른쪽 이미지
             "p" : 포인트 클라우드
-            "velo2cam" : 벨로다인에서 카메라 좌표계로 옮기는 정보가 있는 파일
-            "cam2cam"  : 카메라 좌표에서 카메라 좌표로 옮기는 파일 # 확인 필요
+            "v2c" : 벨로다인에서 카메라 좌표계로 옮기는 정보가 있는 파일
+            "c2c"  : 카메라 좌표에서 카메라 좌표로 옮기는 파일 # 확인 필요
             """
-            dataname_dict[category]      = {}
-            dataname_dict[category]["l"] = []
-            dataname_dict[category]["r"] = []
-            dataname_dict[category]["p"] = []
-            dataname_dict[category]["velo2cam"] = []
-            dataname_dict[category]["cam2cam"]  = []
+            dataname_dict[category]        = {}
+            dataname_dict[category]["l"]   = []
+            dataname_dict[category]["r"]   = []
+            dataname_dict[category]["p"]   = []
+            dataname_dict[category]["v2c"] = []
+            dataname_dict[category]["c2c"] = []
             
             if self.use_point == True:
                 # "./dataset/train/2011_09_26_drive_0001_sync/image_02/data"
@@ -135,8 +137,8 @@ class KITTIRawDataset(object):
                     dataname_dict[category]["l"].append(common_l_path + "/" + filename.split(".")[0] + ".jpg")
                     dataname_dict[category]["r"].append(common_r_path + "/" + filename.split(".")[0] + ".jpg")
                     dataname_dict[category]["p"].append(common_p_path + "/" + filename)
-                    dataname_dict[category]["velo2cam"].append(velo2cam_path)
-                    dataname_dict[category]["cam2cam"].append(cam2cam_path)
+                    dataname_dict[category]["v2c"].append(velo2cam_path)
+                    dataname_dict[category]["c2c"].append(cam2cam_path)
 
             elif self.use_point == False:
                 # "./dataset/train/2011_09_26_drive_0001_sync/image_02/data"
@@ -150,13 +152,13 @@ class KITTIRawDataset(object):
                 for filename in os.listdir(self.path + "/" + yyyy_mm_dd + "/" + self.r_path):
                     cam2cam_path  = self.dataset + "/" + self.calib_path + "/" + yyyy_mm_dd.split("_drive")[0] + "/" + self.cam2cam
                     dataname_dict[category]["r"].append(common_r_path + "/" + filename)
-                    dataname_dict[category]["cam2cam"].append(cam2cam_path)
+                    dataname_dict[category]["c2c"].append(cam2cam_path)
             
-            dataname_dict[category]["l"]        = natsorted(dataname_dict[category]["l"])
-            dataname_dict[category]["r"]        = natsorted(dataname_dict[category]["r"])
-            dataname_dict[category]["p"]        = natsorted(dataname_dict[category]["p"])
-            dataname_dict[category]["velo2cam"] = natsorted(dataname_dict[category]["velo2cam"])
-            dataname_dict[category]["cam2cam"]  = natsorted(dataname_dict[category]["cam2cam"])
+            dataname_dict[category]["l"]   = natsorted(dataname_dict[category]["l"])
+            dataname_dict[category]["r"]   = natsorted(dataname_dict[category]["r"])
+            dataname_dict[category]["p"]   = natsorted(dataname_dict[category]["p"])
+            dataname_dict[category]["v2c"] = natsorted(dataname_dict[category]["v2c"])
+            dataname_dict[category]["c2c"] = natsorted(dataname_dict[category]["c2c"])
         return dataname_dict
 
 
@@ -175,7 +177,7 @@ class KITTIRawDataset(object):
                    Dont use def mono_sequence and Go def stereo_sequence"
 
         sequence = {}
-        
+
         if self.use_point == True:
             sequence["image"] = []
             sequence["point"] = []
@@ -192,9 +194,9 @@ class KITTIRawDataset(object):
                                         self.dataname_dict[yyyy_mm_dd]["p"][index], 
                                         self.dataname_dict[yyyy_mm_dd]["p"][index+1]))
                         sequence["v2c"].append(
-                                        self.dataname_dict[yyyy_mm_dd]["velo2cam"][index])
+                                        self.dataname_dict[yyyy_mm_dd]["v2c"][index])
                         sequence["c2c"].append(
-                                        self.dataname_dict[yyyy_mm_dd]["cam2cam"][index])
+                                        self.dataname_dict[yyyy_mm_dd]["c2c"][index])
 
                     elif num_frames == 3:
                         sequence["image"].append((
@@ -206,9 +208,9 @@ class KITTIRawDataset(object):
                                         self.dataname_dict[yyyy_mm_dd]["p"][index+1],
                                         self.dataname_dict[yyyy_mm_dd]["p"][index+2]))
                         sequence["v2c"].append(
-                                        self.dataname_dict[yyyy_mm_dd]["velo2cam"][index])
+                                        self.dataname_dict[yyyy_mm_dd]["v2c"][index])
                         sequence["c2c"].append(
-                                        self.dataname_dict[yyyy_mm_dd]["cam2cam"][index])
+                                        self.dataname_dict[yyyy_mm_dd]["c2c"][index])
 
                     elif num_frames == 5:
                         sequence["image"].append((
@@ -224,9 +226,9 @@ class KITTIRawDataset(object):
                                         self.dataname_dict[yyyy_mm_dd]["p"][index+3],
                                         self.dataname_dict[yyyy_mm_dd]["p"][index+4]))
                         sequence["v2c"].append(
-                                        self.dataname_dict[yyyy_mm_dd]["velo2cam"][index])
+                                        self.dataname_dict[yyyy_mm_dd]["v2c"][index])
                         sequence["c2c"].append(
-                                        self.dataname_dict[yyyy_mm_dd]["cam2cam"][index])
+                                        self.dataname_dict[yyyy_mm_dd]["c2c"][index])
                     else:
                         raise "pair is 2 or 3 or 5"
 
@@ -241,7 +243,7 @@ class KITTIRawDataset(object):
                                         self.dataname_dict[yyyy_mm_dd][mono_type][index], 
                                         self.dataname_dict[yyyy_mm_dd][mono_type][index+1]))
                         sequence["c2c"].append(
-                                        self.dataname_dict[yyyy_mm_dd]["cam2cam"][index])
+                                        self.dataname_dict[yyyy_mm_dd]["c2c"][index])
 
                     elif num_frames == 3:
                         sequence["image"].append((
@@ -249,7 +251,7 @@ class KITTIRawDataset(object):
                                         self.dataname_dict[yyyy_mm_dd][mono_type][index+1], 
                                         self.dataname_dict[yyyy_mm_dd][mono_type][index+2]))
                         sequence["c2c"].append(
-                                        self.dataname_dict[yyyy_mm_dd]["cam2cam"][index])
+                                        self.dataname_dict[yyyy_mm_dd]["c2c"][index])
 
                     elif num_frames == 5:
                         sequence["image"].append((
@@ -259,17 +261,9 @@ class KITTIRawDataset(object):
                                         self.dataname_dict[yyyy_mm_dd][mono_type][index+3], 
                                         self.dataname_dict[yyyy_mm_dd][mono_type][index+4]))
                         sequence["c2c"].append(
-                                        self.dataname_dict[yyyy_mm_dd]["cam2cam"][index])
+                                        self.dataname_dict[yyyy_mm_dd]["c2c"][index])
                     else:
                         raise "pair is 2 or 3 or 5"
-
-        """
-        return test
-        pprint(len(mono_sequence["image"]))
-        pprint(len(mono_sequence["point"]))
-        pprint(mono_sequence["image"][:2])
-        pprint(mono_sequence["point"][:2])
-        """
         return sequence
 
 
@@ -293,9 +287,9 @@ class KITTIRawDataset(object):
                                         self.dataname_dict[yyyy_mm_dd]["r"][index],
                                         self.dataname_dict[yyyy_mm_dd]["p"][index]))
                         sequence["v2c"].append(
-                                        self.dataname_dict[yyyy_mm_dd]["velo2cam"][index])
+                                        self.dataname_dict[yyyy_mm_dd]["v2c"][index])
                         sequence["c2c"].append(
-                                        self.dataname_dict[yyyy_mm_dd]["cam2cam"][index])
+                                        self.dataname_dict[yyyy_mm_dd]["c2c"][index])
 
                     elif num_frames == 2:
                         sequence["stereo"].append((
@@ -306,9 +300,9 @@ class KITTIRawDataset(object):
                                         self.dataname_dict[yyyy_mm_dd]["r"][index+1],
                                         self.dataname_dict[yyyy_mm_dd]["p"][index+1]))
                         sequence["v2c"].append(
-                                        self.dataname_dict[yyyy_mm_dd]["velo2cam"][index])
+                                        self.dataname_dict[yyyy_mm_dd]["v2c"][index])
                         sequence["c2c"].append(
-                                        self.dataname_dict[yyyy_mm_dd]["cam2cam"][index])
+                                        self.dataname_dict[yyyy_mm_dd]["c2c"][index])
 
                     elif num_frames == 3:
                         sequence["stereo"].append((
@@ -322,9 +316,9 @@ class KITTIRawDataset(object):
                                         self.dataname_dict[yyyy_mm_dd]["r"][index+2],
                                         self.dataname_dict[yyyy_mm_dd]["p"][index+2]))
                         sequence["v2c"].append(
-                                        self.dataname_dict[yyyy_mm_dd]["velo2cam"][index])
+                                        self.dataname_dict[yyyy_mm_dd]["v2c"][index])
                         sequence["c2c"].append(
-                                        self.dataname_dict[yyyy_mm_dd]["cam2cam"][index])
+                                        self.dataname_dict[yyyy_mm_dd]["c2c"][index])
                     else:
                         raise "pair is 1 or 2 or 3"
 
@@ -336,7 +330,7 @@ class KITTIRawDataset(object):
                                         self.dataname_dict[yyyy_mm_dd]["l"][index], 
                                         self.dataname_dict[yyyy_mm_dd]["r"][index]))
                         sequence["c2c"].append(
-                                        self.dataname_dict[yyyy_mm_dd]["cam2cam"][index])
+                                        self.dataname_dict[yyyy_mm_dd]["c2c"][index])
 
                     elif num_frames == 2:
                         sequence["stereo"].append((
@@ -345,7 +339,7 @@ class KITTIRawDataset(object):
                                         self.dataname_dict[yyyy_mm_dd]["l"][index+1], 
                                         self.dataname_dict[yyyy_mm_dd]["r"][index+1]))
                         sequence["c2c"].append(
-                                        self.dataname_dict[yyyy_mm_dd]["cam2cam"][index])
+                                        self.dataname_dict[yyyy_mm_dd]["c2c"][index])
 
                     elif num_frames == 3:
                         sequence["stereo"].append((
@@ -356,7 +350,7 @@ class KITTIRawDataset(object):
                                         self.dataname_dict[yyyy_mm_dd]["l"][index+2], 
                                         self.dataname_dict[yyyy_mm_dd]["r"][index+2]))
                         sequence["c2c"].append(
-                                        self.dataname_dict[yyyy_mm_dd]["cam2cam"][index])
+                                        self.dataname_dict[yyyy_mm_dd]["c2c"][index])
                     else:
                         raise "pair is 1 or 2 or 3"
         """
@@ -377,17 +371,19 @@ class GetKITTI(object):
                 num_frames: int):
         """
         Args:
-            path: "./dataset/raw_images"
+            path: "./dataset/kitti"
             option: "train" or "val"
             use_point: True or False
             type: "stereo", "left", "right"
         """
         self.path       = path
+        self.raw_images = "raw_image"
         self.option     = option
         self.use_point  = use_point
         self.type       = types
-        self.KITTI      = KITTIRawDataset(self.path + "/" + self.option, self.use_point)
+        self.KITTI      = KITTIRawDataset(self.path + "/" + self.raw_images + "/" + self.option, self.use_point)
         self.num_frames = num_frames
+    
     
     def item(self):
         if self.type == "stereo":

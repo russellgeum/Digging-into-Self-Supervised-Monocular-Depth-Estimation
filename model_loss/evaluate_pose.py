@@ -16,9 +16,8 @@ from options import MonodepthOptions
 from datasets import KITTIOdomDataset
 from model_layer import transformation_from_parameters
 from model_utility import readlines
-"""
-Following up https://github.com/nianticlabs/monodepth2/tree/master/networks
-"""
+
+
 # from https://github.com/tinghuiz/SfMLearner
 def dump_xyz(source_to_target_transformations):
     xyzs = []
