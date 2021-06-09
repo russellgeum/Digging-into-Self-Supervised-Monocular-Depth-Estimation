@@ -1,6 +1,6 @@
 # Intro (NOT official)
-Implementation of "Digging into Self-Supervised Monocular Depth Estimation (ICCV 2019)  
-- [Paper](https://arxiv.org/abs/1806.01260)
+Implementation of "Digging into Self-Supervised Monocular Depth Estimation (ICCV 2019)"  
+- [Digging into Self-Supervised Monocular Depth Estimation](https://arxiv.org/abs/1806.01260)  
 This repo follow up new KITTI depth bechmark split (But except Person videos)  
 - [KITTI Depth Comletion Evaluation](http://www.cvlibs.net/datasets/kitti/eval_depth.php?benchmark=depth_completion)  
 - [KITTI Raw Data](http://www.cvlibs.net/datasets/kitti/raw_data.php)  
