@@ -14,8 +14,8 @@ torch >= 1.7.1
 albumentations == 0.5.2
 ```
 # Sample
-![image](https://github.com/Doyosae/Digging_Into_Self-Supervised_Monocular_Depth_Estimation/blob/main/model_save/sample/image.gif)  
-![disp](https://github.com/Doyosae/Digging_Into_Self-Supervised_Monocular_Depth_Estimation/blob/main/model_save/sample/disp.gif)  
+![image](https://github.com/Doyosae/Digging_Into_Self-Supervised_Monocular_Depth_Estimation/blob/main/sample/image.gif)  
+![disp](https://github.com/Doyosae/Digging_Into_Self-Supervised_Monocular_Depth_Estimation/blob/main/sample/disp.gif)  
 # Folder  
 ```
 dataset/
@@ -31,11 +31,31 @@ model_train.py
 model_utility.py
 ```
 # Usage
+1. Download Raw KITTI Dataset
+```
+wget -i splits_kitti/archives2download.txt -P dataset/  
+```
+2. Unzip Dataset
+```
+cd dataset
+unzip "*.zip"
+```
+3. Install moreutils and parallel  
+```
+apt-get update -y
+apt-get install moreutils
+or
+apt-get install -y moreutils
+```
+4. Convert from png to jpg
+```
+find dataset/ -name '*.png' | parallel 'convert -quality 92 -sampling-factor 2x2,1x1,1x1 {.}.png {.}.jpg && rm {}'
+```
+5. Train model
 ```
 python model_train.py
 ```
 # Will...
-1. metric problem  
-2. Eigen split?  
+1. Eigen split?  
 # Reference  
 [Offical Code](https://github.com/nianticlabs/monodepth2)  
