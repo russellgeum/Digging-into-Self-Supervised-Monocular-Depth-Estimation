@@ -1,15 +1,12 @@
-# -*- coding: utf-8 -*-
+import os
 import random
 import numpy as np
-
 from PIL import Image
-from .kitti import *
 
 import torch
 from torch.utils.data import Dataset
 
-import albumentations
-import albumentations.pytorch
+import skimage.transform
 from albumentations import Resize
 from albumentations.pytorch.transforms import ToTensor
 from albumentations.augmentations.transforms import HorizontalFlip
@@ -18,20 +15,20 @@ from albumentations.augmentations.transforms import ColorJitter
 from model_utility import *
 
 
-# # intrinsic camera (https://github.com/nianticlabs/monodepth2)
-# self.K             = np.array([[0.58, 0, 0.5, 0],
-#                                [0, 1.92, 0.5, 0],
-#                                [0,    0,   1, 0],
-#                                [0,    0,   0, 1]], dtype = np.float32)
+
 class KITTIDataset(Dataset):
-    def __init__(self, dictionary, is_training = False, scale = 1, centre = "right"):
+    def __init__(self, 
+                dictionary: list, frame_idx: list, frame_ids: list, key_index: int, 
+                is_training = False, scale = 1):
         """
         Generating monocular sequence of KITTI Raw Dataset
-
         Args
-            dictionary: dictionary
+            dictionary: 데이터 딕셔너리
             is_training: bool
-            scale: int
+            frame_ids: 프레임 아이디
+            keyframe_idx: 키 프레임 인덱스
+            is_training: training 데이터 유/무
+            scale: 데이터 스케일
 
         dictionary = {"image" : 
                       "point" : 
@@ -40,7 +37,7 @@ class KITTIDataset(Dataset):
         1) point 키가 있다면 "point", "v2c", "c2c" 키들의 값을 모두 사용
         2) point 키가 없다면 "image" 키의 값들만 사용
         """
-        if int(scale) > 3:
+        if scale > 3:
             raise "scale must be 0 or 1 or 2 or 3"
         self.dictionary     = dictionary
         self.image_key      = "image"
@@ -55,90 +52,48 @@ class KITTIDataset(Dataset):
                 self.c2c_seqeunce   = dictionary[self.cam2cam_key]
                 break
 
-        """
-        self.image_sequence[0] = (이미지1 경로, 이미지2 경로, 이미지3 경로)
-        self.image_Seqeunce[1] = (이미지2 경로, 이미지3 경로, 이미지4 경로)
-        시퀀스 수에 따른 프레임 아이디와 프레임 인덱스 매칭을 메뉴얼리하게 설정
-        시퀀스 2이면 인덱스 1번 프레임이 키 프레임
-        시퀀스 3이면 인덱스 1번 프레임이 키 프레임
-        시퀀스 5이면 인덱스 2번 프레임이 키 프레임
-        시퀀스 7이면 인덱스 3번 프레임이 키 프레임
-        시퀀스 2n+1이면 인덱스 n번 프레임이 키 프레임
-        """
-        self.centre       = centre
-        self.num_sequence = len(self.image_sequence[0]) # 2 3 5 (7)
-        if self.num_sequence == 2:
-            if self.centre == "mid":
-                self.frame_idx = [1, 0]
-                self.frame_ids = [0, -1]
-                self.depth_idx = 1
-            elif self.centre == "right":
-                self.frame_idx = [1, 0]
-                self.frame_ids = [0, -1]
-                self.depth_idx = 1
-        elif self.num_sequence == 3:
-            if self.centre == "mid":
-                self.frame_idx = [1, 0, 2]
-                self.frame_ids = [0, -1, 1]
-                self.depth_idx = 1
-            elif self.centre == "right":
-                self.frame_idx = [2, 0, 1]
-                self.frame_ids = [0, -2, -1]
-                self.depth_idx = 2
-        elif self.num_sequence == 5:
-            if self.centre == "mid":
-                self.frame_idx = [2, 0, 1, 3, 4]
-                self.frame_ids = [0, -2, -1, 1, 2]
-                self.depth_idx = 3
-            elif self.centre == "right":
-                self.frame_idx = [4, 0, 1, 2, 3]
-                self.frame_ids = [0, -4, -3, -2, -1]
-                self.depth_idx = 4
+        # self.image_sequence[index] = (이미지1 경로, 이미지2 경로, 이미지3 경로)
+        self.num_sequence = len(self.image_sequence[0]) # 프레임의 장수
+        self.frame_idx    = frame_idx
+        self.frame_ids    = frame_ids
+        self.key_index    = key_index
 
         # intrinsic camera (https://github.com/nianticlabs/monodepth2)
         self.K             = np.array([[0.58, 0, 0.5, 0],
                                        [0, 1.92, 0.5, 0],
                                        [0,    0,   1, 0],
-                                       [0,    0,   0, 1]],
-                                       dtype = np.float32)
+                                       [0,    0,   0, 1]], dtype = np.float32)
         # albumentations 라이브러리를 사용하기 위한 옵션
         self.is_training    = is_training
-        self.scale          = scale
         self.resize         = {}
         self.num_scales     = list(range(4)) # [0, 1, 2, 3]
         self.original_scale = (375, 1242)
-        self.default_scale  = (384, 1280) # 이미지 원본 크기를 쓰지 않고, 기본적으로 스케일링되는 크기
-        self.scale_size     = [(int(self.default_scale[0]/2**(self.scale+i)), 
-                                int(self.default_scale[1]/2**(self.scale+i))) \
-                                for i in range(len(range(4)))]
+        self.default_scale  = [(320, 1024), (192, 640), (96, 320), (48, 160)] # corresponding as scale: 0, 1, 2, 3
+        self.scale_list = [(self.default_scale[scale][0]//(2**i), 
+                            self.default_scale[scale][1]//(2**i)) for i in self.num_scales]
         print("-- KITTI scaling table")
-        print("Scale factor is {0}".format(self.scale))
-        print("KITTI scale :  {0} {1}".format(self.original_scale[0], self.original_scale[1]))
-        print("0 scale     :  {0} {1}".format(self.default_scale[0], self.default_scale[1]))
-        print("1 scale     :  {0} {1}".format(int(self.default_scale[0]/2), int(self.default_scale[1]/2)))
-        print("2 scale     :  {0} {1}".format(int(self.default_scale[0]/4), int(self.default_scale[1]/4)))
-        print("3 scale     :  {0} {1}".format(int(self.default_scale[0]/8), int(self.default_scale[1]/8)))
-        print("Resolution List (from scale {0}) : {1}".format(self.scale, self.scale_size))
+        print("Scale factor is {0}".format(scale))
+        print("Default 0 scale     :  {0} {1}".format(self.default_scale[0][0], self.default_scale[0][1]))
+        print("Default 1 scale     :  {0} {1}".format(int(self.default_scale[1][0]), int(self.default_scale[1][1])))
+        print("Default 2 scale     :  {0} {1}".format(int(self.default_scale[2][0]), int(self.default_scale[1][1])))
+        print("Default 3 scale     :  {0} {1}".format(int(self.default_scale[3][0]), int(self.default_scale[1][1])))
+        print("Resolution List (from scale {0}) : {1}".format(scale, self.scale_list))
 
         """
         데이터로더 프로세스 플로우
         1. 좌우로 뒤집을지 말지 결정하는 boolean do_flip과 함께 이미지를 로드 (원본 이미지)
            키티 데이터 원본 크기는 (375, 1245)
-        2. 원본 스케일 이미지를 0부터 3까지 해당하는 사이즈로 리사이즈
-           ("color", <frame_ids>, <scale> != -1) 키 형태로 저장
+        2. 원본 스케일 이미지를 원하는 스케일로 바꾸고, 그 스케일부터 2배율로 줄어드는 리스케일 [0, 1, 2, 3]
+           ("color", <frame_ids>, <scale>) 키 형태로 저장
         3. is_training 모드이면 do_auge를 주고, 각 스케일 이미지마다 augmentation을 적용
-           ("color_aug", <frame_ids>, <scale> != -1) 키 형태로 저장
+           ("color_aug", <frame_ids>, <scale>) 키 형태로 저장
         4. GT로 사용하는 Point2Depth 이미지는 원본 스케일로 저장
-           그리고 원본 스케일에 맞게 세팅된 K는
-           scale = 0이면 (2**0)로 나눔
-           scale = 1이면 (2**1)로 나눔
-           scale = 2이면 (2**2)로 나눔
+           그리고 원본 스케일에 맞게 세팅된 K는 monodepth2의 intrinsic parameter를 따름
         5. 마지막으로 input_data의 모든 키 값들을 numpy2tensor 변환
         """
-        for scale, (height, width) in zip(self.num_scales, self.scale_size):
+        for scale, (height, width) in zip(self.num_scales, self.scale_list):
             self.resize[scale] = Resize(height = int(height), width  = int(width), interpolation = 1)
-        self.depthresize    = Resize(height = self.original_scale[0], width = self.original_scale[1], interpolation = 1)
-       
+        self.depth_resize   = Resize(height = self.original_scale[0], width = self.original_scale[1], interpolation = 0)
         self.augment_key    = "image"
         self.brightness     = (0.8, 1.2)
         self.contrast       = (0.8, 1.2)
@@ -155,6 +110,7 @@ class KITTIDataset(Dataset):
 
 
     def load_image(self, file_path, do_flip): # 이미지를 로드, 나중에 PIL로 고치기
+        # numpy_image = cv2.imread(file_path)
         image = Image.open(file_path)
         numpy_image = np.array(image)
         if do_flip == True:
@@ -193,58 +149,52 @@ class KITTIDataset(Dataset):
             do_flip:    뒤집을꺼면 미리 뒤집자 (is_training에서 발동)
         
         예시)
-        in zip ([0, -2, -1, 1, 2], [2, 0, 1, 3, 4])로, 프레임 아이디와 프레임 인덱스를 동시에 순회한다.
-        해당 프레임 인덱스의 이미지를 로드하여 매핑되는 프레임 아이디의 원본 스케일 키로 저장한다.
-        ex) 프레임 인덱스 [0, 1, 2, 3, 4] 중 2번 프레임이 0번 아이디로 키프레임에 해당
-            프레임 인덱스 0번, 1번은 (2, 0) 기준으로 (1, -1), (0, -2)에 해당
-            프레임 인덱스 3번, 4번은 (2, 0) 기준으로 (3, 1), (4, 2)에 해당
+        프레임 5장은 인덱스 순서가 [0, 1, 2, 3, 4]이다. 이것을 아이디 [-2, -1, 0, 1, 2]로 매핑한다.
+        해당 프레임 인덱스의 이미지를 로드하여 매핑하는 프레임 아이디로 저장한다.
         """
-        for frame_id, frame_index in zip(self.frame_ids, self.frame_idx):
-            image = self.load_image(self.image_sequence[index][frame_index], do_flip)
-            input_data.update({("color", frame_id, scale): 
-                self.resize_image(scale, image) for scale in self.num_scales})
+        for frame_id, frame_ind in zip(self.frame_ids, self.frame_idx): # 배치 데이터마다 프레임 인덱스에 해당하는 이미지를 4개의 스케일로 변환
+            image = self.load_image(self.image_sequence[index][frame_ind], do_flip)
+            input_data.update({("color", frame_id, scale): self.resize_image(scale, image) for scale in self.num_scales})
         return input_data
 
 
     def preprocessing_depth(self, input_data, index, do_flip):
         """
-        키 프레임의 포인트 클라우드를 불러오고, 
-        원본 스케일로 리사이즈하여 input_data 뎁스 키에 저장
         Args:
             input_data: 데이터를 담을 딕셔너리
             index:      배치로 들어갈 데이터의 인덱스
             do_flip:    뒤집을꺼면 미리 뒤집자 (is_training 여부에서 미리 결정)
-        
-        과정)
-        self.v2c_sequence[batch_index]               ./dataset/calib_path/2011_09_26/calib_velo_to_cam.txt
-        self.c2c_seqeunce[batch_index]               ./dataset/calib_path/2011_09_26/calib_cam_to_cam.txt
-        self.point_seqeunce[batch_index][seq_index]  ./dataset/raw_data/train/2011_09_26_drive_0001_sync/velodyne_points/data/0000000000.bin
+
+        키 프레임의 포인트 클라우드를 불러오고, 원본 스케일로 리사이즈하여 input_data 뎁스 키에 저장
+
+        이슈)
+        문제: 계속해서 결과물의 시각적 느낌과는 다르게, 뎁스 메트릭이 정확하게 측정 안되는 문제 발생
+        원인: 포인트클라우드에서 추출한 뎁스 맵을 전처리할 때 잘못 전처리 된 듯함 --> 향후 어떤 차이가 있는지 잘 파악할 것
+        해결: skimage.transform.resize 함수로 해결 order = 0, presevr_range = True, mode = "constant" 인자가 무엇인지 이해할 것
+              또 대체할 수 있는 함수가 무엇인지 찾아볼 것
+        또 다른 해결
+        Albumentations.Resize 메서드를 그대로 사용하되, interpolation = 0으로 둘 것
         """
-        depth = Point2Depth(
-                    self.v2c_sequence[index], self.c2c_seqeunce[index],self.point_sequence[index][self.depth_idx])
+        depth = Point2Depth(self.v2c_sequence[index], self.c2c_seqeunce[index],self.point_sequence[index][self.key_index])
+        # depth = self.depth_resize(image = depth)
+        # depth = np.reshape(depth["image"], (depth["image"].shape[0], depth["image"].shape[1], 1))
+
+        depth = skimage.transform.resize(depth, (1242, 375)[::-1], order=0, preserve_range=True, mode='constant')
         depth = np.reshape(depth, (depth.shape[0], depth.shape[1], 1))
         if do_flip == True:
             depth = self.flip_image(depth)
-
-        depth = self.depthresize(image = depth)
-        input_data[("depth", 0)] = depth["image"]
+        input_data[("depth", 0)] = depth
         return input_data
 
 
     def preprocessing_intrinsic(self, input_data, index):
         """
-        만약 (320, 1024) 스케일부터 사용한다면, self.scale = 0이고 self.default_scale에서 0으로 나눔
-        만약 (160, 512) 스케일부터 사용한다면 self.scale = 1이고 self.default_scale에서 2로 나눔
+        1. 원본 intrinsic을 사용할 경우, "스케일링 크기 / 원본 크기" 비율을 곱해서 intrinsic을 줄여줌
+        2. monodepth2의 intrinsic을 사용할 경우, 스케일링 크기만 곱해서 intrinsic을 늘려줌
         """
         K_copy       = self.K.copy()
-        K_copy[0, :] = K_copy[0, :] * self.scale_size[0][1]
-        K_copy[1, :] = K_copy[1, :] * self.scale_size[0][0]
-
-        # K, _ = read_cam2cam(self.c2c_seqeunce[index])
-        # K_copy       = K.copy
-        # K_copy[0, :] = K_copy[0, :] * (self.scale_size[0][1] / self.original_scale[1])
-        # K_copy[0, :] = K_copy[0, :] * (self.scale_size[0][1] / self.original_scale[1])
-
+        K_copy[0, :] = K_copy[0, :] * self.scale_list[0][1]
+        K_copy[1, :] = K_copy[1, :] * self.scale_list[0][0]
         inv_K        = np.linalg.pinv(K_copy)
         input_data[("K", 0)]     = torch.from_numpy(K_copy)
         input_data[("inv_K", 0)] = torch.from_numpy(inv_K)
@@ -254,8 +204,9 @@ class KITTIDataset(Dataset):
     def __getitem__(self, index):
         """
         returns 
-            ("color", <frame_id>, <scale>)          for raw colour images,
-            ("color_aug", <frame_id>, <scale>)      for augmented colour images,
+            ("color", <frame_id>, <scale>)             for raw color images,
+            ("color_aug", <frame_id>, <scale>)         for aug color images,
+            ("depth", 0) and ("K", 0) and ("inv_K", 0) for depth, intrinsic of key frame
             0       images resized to (self.width,      self.height     )
             1       images resized to (self.width // 2, self.height // 2)
             2       images resized to (self.width // 4, self.height // 4)
@@ -268,21 +219,17 @@ class KITTIDataset(Dataset):
         input_data     = self.preprocessing_image(input_data, index, do_flip)
         input_data     = self.preprocessing_depth(input_data, index, do_flip)
 
-        """
-        self.frame_ids: [0, -1] or [0, -2, -1] or [0, -4, -3, -2, -1]
-        프레임 아이디마다 서로 다른 스케일을 한 번에 recolor augments를 하여 "colo_aug" 키로 저장
-        """
-        if do_auge:
+        if do_auge: # 프레임 아이디마다 서로 다른 스케일을 한 번에 recolor augments를 하여 "colo_aug" 키로 저장
             for frame_id in self.frame_ids:
                 input_data.update({("color_aug", frame_id, scale):
                     self.recolor_image(input_data[("color", frame_id, scale)]) for scale in self.num_scales})
+
         else:
             for frame_id in self.frame_ids:
                 input_data.update({("color_aug", frame_id, scale):
                     input_data[("color", frame_id, scale)] for scale in self.num_scales})
 
-        # 이미지 처리 마지막 단계
-        # input_data에 들어있는 모든 딕셔너리의 값을 토치 텐서 타입으로 젼환
+        # input_data에 들어있는 모든 키의 값을 토치 텐서 타입으로 젼환
         input_data = {key: self.numpy2tensor(input_data[key]) for key in input_data}
 
         # 원본 이미지를 스케일링한 것과 동일하게 K, inv_K 계산해서 동일하게 스케일링

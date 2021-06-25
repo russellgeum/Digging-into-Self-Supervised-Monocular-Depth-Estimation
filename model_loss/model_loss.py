@@ -7,6 +7,7 @@ import torch.nn as nn
 import torch.nn.functional  as F
  
 
+
 class SSIM(nn.Module):
     def __init__(self):
         super(SSIM, self).__init__()
@@ -39,6 +40,7 @@ class SSIM(nn.Module):
         SSIMd = (intensity_y ** 2 + intensity_y ** 2 + self.C1) * (sigma_x ** 2 + sigma_y ** 2 + self.C2)
 
         return torch.clamp((1 - SSIMn / SSIMd) / 2, 0, 1)
+
 
 
 class EdgeAwareSmoothLoss(nn.Module):
@@ -87,8 +89,10 @@ class EdgeAwareSmoothLoss(nn.Module):
         return smooth_loss
 
 
+
 ###############################################################################################################
 ###############################################################################################################
+
 
 
 class ReprojectionLoss(nn.Module):

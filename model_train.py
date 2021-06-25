@@ -40,8 +40,8 @@ def pytorch_randomness(random_seed = 42):
 class trainer(object):
     def __init__(self, options):
         pytorch_randomness()
-        self.options          = options
         self.device           = 'cuda:0' if torch.cuda.is_available() else 'cpu'
+        self.options          = options
         self.load_path        = options.load_path
         self.epoch            = options.epoch
         self.batch_size       = options.batch
@@ -51,6 +51,7 @@ class trainer(object):
         self.max_depth        = options.max_depth
 
         # 아래로는 이미지 사이즈와 뎁스 옵션에 대한 정의 (for KITTI)
+        self.frame_idx        = options.frame_idx
         self.frame_ids        = options.frame_ids    # [-2, -1, 0, 1, 2]
         self.num_frames       = len(self.frame_ids)  # len([-2, -1, 0, 1, 2])
         if options.pose_frames == "all":
@@ -59,20 +60,16 @@ class trainer(object):
             self.num_pose_frames = 2
 
         self.original_scale   = (375, 1242)
-        self.default_scale    = (384, 1280)
-        self.scale            = options.scale       # 0, 1, 2, 3 중 하나
-        self.scales           = options.scales      # 스케일의 범위 [0, 1, 2, 3] (현재 지정한 self.scale로부터 시작)
-        self.num_scales       = len(options.scales) # [0, 1, 2, 3]의 길이는 4
-        self.resolution       = [(int(self.default_scale[0]/2**(self.scale+i)), 
-                                  int(self.default_scale[1]/2**(self.scale+i))) \
+        self.default_scale    = [(320, 1024), (192, 640), (96, 320), (48, 160)]
+        self.scale            = options.scale_factor # 0, 1, 2, 3 중 하나, default_scale에서 어떤 스케일을 쓸지 선택
+        self.scales           = options.scales       # 스케일의 범위 [0, 1, 2, 3] (현재 지정한 self.scale로부터 시작)
+        self.num_scales       = len(options.scales)  # [0, 1, 2, 3]의 길이는 4
+        self.resolution       = [(self.default_scale[self.scale][0]//(2**i), 
+                                  self.default_scale[self.scale][1]//(2**i))
                                   for i in self.scales]
 
         self.height           = self.resolution[0][0] # 학습에 사용할 4개의 스케일 중 가장 맨 앞 스케일이 모델에 입력
         self.width            = self.resolution[0][1]
-
-        self.train_args       = [options.train_path, "train", True, "left", self.num_frames]
-        self.valid_args       = [options.valid_path, "val", True, "left", self.num_frames]
-    
         self.num_layers       = options.num_layers    # 레즈넷 버전 18 or 36 or 50, 디폴트 18
         self.weight_init      = options.weight_init   # "pretrained"
         self.pose_type        = options.pose_type     # 포즈 네트워크 타입 "posecnn", "separate_resnet", shared_resnet"
@@ -113,20 +110,19 @@ class trainer(object):
     ###############################################################################################################
     ###############################################################################################################
     def definition_dataloader(self): # 키티 데이터를 불러오는 함수
-        train_sequence   = GetKITTI(*self.train_args).item()
-        valid_sequence   = GetKITTI(*self.valid_args).item()
-        # value = 8
-        # for key in train_sequence:
-        #     train_sequence[key] = train_sequence[key][:10 * value]
-        # for key in valid_sequence:
-        #     valid_sequence[key] = valid_sequence[key][:value]
-        train_dataset    = KITTIDataset(train_sequence, True, scale = self.scale, centre = "mid")
-        valid_dataset    = KITTIDataset(valid_sequence, False, scale = self.scale, centre = "mid")
+        train_sequence = GetKITTI(
+            self.options.datapath, self.options.splits, "train", True, "l", self.num_frames).item()
+        valid_sequence = GetKITTI(
+            self.options.datapath, self.options.splits, "valid", True, "l", self.num_frames).item()
+        train_dataset  = KITTIDataset(
+            train_sequence, self.frame_idx, self.frame_ids, self.options.key_frame, True, self.scale)
+        valid_dataset  = KITTIDataset(
+            valid_sequence, self.frame_idx, self.frame_ids, self.options.key_frame, False, self.scale)
 
         train_dataloader = DataLoader(train_dataset, self.batch_size, True,
-                drop_last = True, prefetch_factor = self.options.prepetch, num_workers = self.options.num_workers)
+            drop_last = True, prefetch_factor = self.options.prepetch, num_workers = self.options.num_workers, pin_memory = True)
         valid_dataloader = DataLoader(valid_dataset, self.batch_size, False, 
-                drop_last = True, prefetch_factor = self.options.prepetch, num_workers = self.options.num_workers)
+            drop_last = True, prefetch_factor = self.options.prepetch, num_workers = self.options.num_workers, pin_memory = True)
         return train_dataloader, valid_dataloader
 
 
@@ -199,25 +195,37 @@ class trainer(object):
 
 
     def model_save(self, epoch, train_log, valid_log):
-        save_directory = "./model_save" + "/" + str(self.pose_type)
+        save_directory = "./model_save" + "/" + str(self.pose_type) +"ver2"
         if not os.path.isdir(save_directory):
             os.makedirs(save_directory)
         
-        if (epoch+1) % 10 == 0: # epoch가 특정 조건을 만족시키는 조건문
-            # 뎁스 인코더, 디코더 모델 저장
+        if (epoch+1) % 10 == 0: # epoch가 특정 조건을 만족시키는 조건문, 뎁스 인코더, 디코더 모델 저장
             torch.save(self.model["encoder"].state_dict(), 
-                    save_directory + "/" + "encoder" + str(epoch+1) + ".pt")
+                save_directory + "/" + "encoder" + str(epoch+1) + ".pt")
             torch.save(self.model["decoder"].state_dict(), 
-                    save_directory + "/" + "decoder" + str(epoch+1) + ".pt")
+                save_directory + "/" + "decoder" + str(epoch+1) + ".pt")
             
             # 포즈 디코더 모델 저장 (포즈 인코더가 있다면 인코더도 저장)
             if self.pose_type == "separate":
                 torch.save(self.model["pose_encoder"].state_dict(), 
-                        save_directory + "/" + "pose_encoder" + str(epoch+1) + ".pt")
+                    save_directory + "/" + "pose_encoder" + str(epoch+1) + ".pt")
 
             torch.save(self.model["pose_decoder"].state_dict(), 
-                    save_directory + "/" + "pose_decoder" + str(epoch+1) + ".pt")
+                save_directory + "/" + "pose_decoder" + str(epoch+1) + ".pt")
+        
+        if (epoch+1) == self.batch_size:
+            torch.save(self.model["encoder"].state_dict(), 
+                save_directory + "/" + "encoder" + str(epoch+1) + ".pt")
+            torch.save(self.model["decoder"].state_dict(), 
+                save_directory + "/" + "decoder" + str(epoch+1) + ".pt")
+            
+            # 포즈 디코더 모델 저장 (포즈 인코더가 있다면 인코더도 저장)
+            if self.pose_type == "separate":
+                torch.save(self.model["pose_encoder"].state_dict(), 
+                    save_directory + "/" + "pose_encoder" + str(epoch+1) + ".pt")
 
+            torch.save(self.model["pose_decoder"].state_dict(), 
+                save_directory + "/" + "pose_decoder" + str(epoch+1) + ".pt")
             for key in train_log: # 모델의 로그 기록 저장
                 np.save(save_directory + "/" + key + str(epoch+1) + ".npy", train_log[key])
                 np.save(save_directory + "/" + key + str(epoch+1) + ".npy", valid_log[key])
@@ -442,9 +450,7 @@ class trainer(object):
                     no_warping_loss = self.reprojection_loss(source_default, target_default)
                     no_reproejction_loss.append(no_warping_loss)
                 no_reproejction_loss = torch.cat(no_reproejction_loss, 1)
-                
-                randn = 1e-7 * torch.randn(no_reproejction_loss.shape).to(self.device)
-                no_reproejction_loss = no_reproejction_loss + randn
+                no_reproejction_loss = no_reproejction_loss + (1e-7 * torch.randn(no_reproejction_loss.shape).to(self.device))
                 combined_loss        = torch.cat((no_reproejction_loss, reproejction_loss), dim = 1)
 
             if combined_loss.shape[0] == 1:
@@ -457,7 +463,7 @@ class trainer(object):
             smooth_loss = self.smooth_loss(disp = disparity, color = target_scale) # disparity와 color로 smooth loss 계산
             
             # Loss summation
-            scale_loss = scale_loss + 0.01 * smooth_loss / (2**scale)
+            scale_loss = scale_loss + self.options.smooth_const * smooth_loss / (2**scale)
             scale_loss = scale_loss + selected_reproejction
             total_loss = total_loss + scale_loss
         

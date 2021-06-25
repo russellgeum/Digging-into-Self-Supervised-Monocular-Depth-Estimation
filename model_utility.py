@@ -1,17 +1,10 @@
 # -*- coding: utf-8 -*-
 import os
-import re
-import sys
-import uuid
 import numpy as np
-from scipy import misc
 from collections import Counter
 
 import torch
-import torch.nn as nn
-from PIL import Image
 import matplotlib.pyplot as plt
-
 
 
 
@@ -225,12 +218,12 @@ def show_image(image, option = "torch", size = (10, 4), cmap = "magma", show_dis
     """
     if show_disp:
         plt.imshow(image, cmap = cmap, vmax = np.percentile(image, 95))
-        plt.show()
         plt.axis('off')
+        plt.show()
     else:
         plt.imshow(image, cmap = cmap)
-        plt.show()
         plt.axis('off')
+        plt.show()
 
 
 def one_graph(data, xlabel, ylabel, title, color, marker, linestyle):
