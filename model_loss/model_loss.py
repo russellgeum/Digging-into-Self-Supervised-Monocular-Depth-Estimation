@@ -26,19 +26,18 @@ class SSIM(nn.Module):
         self.C2 = 0.03 ** 2
     
     def forward(self, image1, image2):
-        image1 = self.refl(image1)
-        image2 = self.refl(image2)
+        image1  = self.refl(image1) # x
+        image2  = self.refl(image2) # y
 
-        intensity_x = self.intensity_x_pool(image1)
-        intensity_y = self.intensity_y_pool(image2)
+        mu_x     = self.intensity_x_pool(image1) # mu_x
+        mu_y     = self.intensity_y_pool(image2) # mu_y
 
-        sigma_x  = self.standard_deviation_x_pool(image1 ** 2) - intensity_x ** 2
-        sigma_y  = self.standard_deviation_y_pool(image2 ** 2) - intensity_y ** 2
-        sigma_xy = self.standard_deviation_xy_pool(image1 * image2) - intensity_x * intensity_y
-
-        SSIMn = (2 * intensity_x * intensity_y + self.C1) * (2 * sigma_xy + self.C2)
-        SSIMd = (intensity_y ** 2 + intensity_y ** 2 + self.C1) * (sigma_x ** 2 + sigma_y ** 2 + self.C2)
-
+        sigma_x  = self.standard_deviation_x_pool(image1 ** 2) - mu_x ** 2
+        sigma_y  = self.standard_deviation_y_pool(image2 ** 2) - mu_y ** 2
+        sigma_xy = self.standard_deviation_xy_pool(image1 * image2) - mu_x * mu_y
+        
+        SSIMn = (2 * mu_x * mu_y + self.C1) * (2 * sigma_xy + self.C2)
+        SSIMd = (mu_x ** 2 + mu_y ** 2 + self.C1) * (sigma_x + sigma_y + self.C2)
         return torch.clamp((1 - SSIMn / SSIMd) / 2, 0, 1)
 
 
@@ -90,11 +89,6 @@ class EdgeAwareSmoothLoss(nn.Module):
 
 
 
-###############################################################################################################
-###############################################################################################################
-
-
-
 class ReprojectionLoss(nn.Module):
     def __init__(self):
         super(ReprojectionLoss, self).__init__()
@@ -104,9 +98,9 @@ class ReprojectionLoss(nn.Module):
         absolute_difference = torch.abs(target - prediction)
         L1_loss             = absolute_difference.mean(1, True)
         ssim_loss           = self.ssim(prediction, target).mean(1, True)
-
         reprojection_loss   = 0.85 * ssim_loss + 0.15 * L1_loss
         return reprojection_loss
+
 
 
 class SmoothLoss(nn.Module):
@@ -116,7 +110,6 @@ class SmoothLoss(nn.Module):
 
     def forward(self, disp, color):
         mean_disp           = disp.mean(2, True).mean(3, True)
-        norm_disp           = disp / (mean_disp + 1e-5)
-
+        norm_disp           = disp / (mean_disp + 1e-7)
         edge_smooth_loss    = self.edge_aware_smooth(norm_disp, color)
         return edge_smooth_loss
