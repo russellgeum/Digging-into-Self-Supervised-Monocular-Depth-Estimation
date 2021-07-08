@@ -93,7 +93,7 @@ class trainer(object):
             self.original_scale   = (1024, 2048)
             self.default_scale    = [(512, 1024), (256, 512), (128, 256), (64, 128)]
 
-        self.scale            = options.scale_factor # 0, 1, 2, 3 중 하나, default_scale에서 어떤 스케일을 쓸지 선택
+        self.scale            = options.scale # 0, 1, 2, 3 중 하나, default_scale에서 어떤 스케일을 쓸지 선택
         self.scales           = options.scales       # 스케일의 범위 [0, 1, 2, 3] (현재 지정한 self.scale로부터 시작)
         self.num_scales       = len(options.scales)  # [0, 1, 2, 3]의 길이는 4
         self.resolution       = [(self.default_scale[self.scale][0]//(2**i), 
@@ -157,11 +157,11 @@ class trainer(object):
         if self.dataset == "kitti":
             dataset = KITTIMonoDataset(
                 self.datapath, filename, is_training, self.frame_ids,
-                ext = ".jpg",  scale_factor = self.opt.scale_factor)
+                ext = ".jpg",  scale = self.opt.scale)
         elif self.dataset == "cityscapes":
             dataset = CityscapesMonoDataset(
                 self.datapath, filename, is_training, self.frame_ids, 
-                mode = mode, ext = ".jpg", scale_factor = self.opt.scale_factor)
+                mode = mode, ext = ".jpg", scale = self.opt.scale)
 
         dataloader = DataLoader(
             dataset, self.batch_size, shuffle, num_workers = self.opt.num_workers, drop_last = True)
@@ -430,17 +430,17 @@ class trainer(object):
         타겟 이미지, 와핑 이미지를 가지고 로스를 계산하는 함수
         1. 스케일 리스트를 돌면서 scale: 0, 1, 2, 3에 대한 뎁스 계산
         2. 해당 스케일의 디스패리티와 타겟 이미지, scale = 0의 원본 타겟 이미지 지정
-        3. 프레임 아이디 리스트를 돌면서 reproejction_loss 계산 (와핑이 잘 되면 로스 0, 와핑이 잘 안되면 로스 큼)
+        3. 프레임 아이디 리스트를 돌면서 reprojection_loss 계산 (와핑이 잘 되면 로스 0, 와핑이 잘 안되면 로스 큼)
 
         4. (매우 중요) self.opt.use_automasking을 켜서 identity_reprojection_loss 계산
-            reproejction_loss warping한 이미지와 target 사이의 로스를 계산
+            reprojection_loss warping한 이미지와 target 사이의 로스를 계산
             identity_reprojection_loss warping하지 않은 원본과 타겟을 계산 
 
-            reproejction_loss < identity_reprojection_loss
+            reprojection_loss < identity_reprojection_loss
             포즈를 잘 알아서 와핑시킨 이미지가 타겟 이미지와 더욱 잘 일치하다는 것의 의미?
             정적인 물체가 배경처럼 간주됨, 그러니까 카메라와 같은 속도, 방향으로 움직이는 물체 -> 로스에서 무시
 
-            reproejction_loss > identity_reprojection_loss
+            reprojection_loss > identity_reprojection_loss
             포즈를 잘 알아서 와핑시켰는데 오히려 와핑 시키지 않은 이미지와의 로스보다도 크다. 어떤 의미?
             포즈에 비해 동적인 물체 모션이 별도로 있다. 이것은 로스에 반영해야겠다.
 
@@ -456,17 +456,17 @@ class trainer(object):
             target_default = inputs[("color", 0, source_scale)] # scale = 0의 타겟 이미지
             
             # target과 warping 이미지에 대해서 reprojection_loss 계산
-            reproejction_loss = []
+            reprojection_loss = []
             for frame_id in self.frame_ids[1: ]:
                 prediction = outputs[("warped_color", frame_id, scale)]         # prediction: [B C 320 1024]
-                reproejction_loss.append(
+                reprojection_loss.append(
                     self.reprojection_loss(prediction, target_default))
-            reproejction_loss = torch.cat(reproejction_loss, 1)
+            reprojection_loss = torch.cat(reprojection_loss, 1)
 
             if self.opt.use_ave_reprojection:
-                reproejction_loss = reproejction_loss.mean(1, keepdim = True)
+                reprojection_loss = reprojection_loss.mean(1, keepdim = True)
             else:
-                reproejction_loss = reproejction_loss
+                reprojection_loss = reprojection_loss
             
             # if self.opt.use_automasking(True) == if not self.disable_automasking(False)
             if self.opt.use_automasking:
@@ -485,7 +485,7 @@ class trainer(object):
             
             if self.opt.use_automasking:
                 identity_reprojection_loss += 0.00001 * torch.randn(identity_reprojection_loss.shape).to(self.device)
-                concat_loss = torch.cat((identity_reprojection_loss, reproejction_loss), dim = 1)
+                concat_loss = torch.cat((identity_reprojection_loss, reprojection_loss), dim = 1)
             else:
                 concat_loss = reprojection_loss
 

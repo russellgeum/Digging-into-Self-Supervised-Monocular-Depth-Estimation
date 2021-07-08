@@ -19,8 +19,9 @@ albumentations == 0.5.2
 # Folder  
 ```
 dataset/
-    calib_path/
-    raw_image/
+    2011_09_26/
+    ...
+    ...
 model_dataloader/
 model_layer/
 model_loss/
@@ -53,9 +54,16 @@ find dataset/ -name '*.png' | parallel 'convert -quality 92 -sampling-factor 2x2
 ```
 5. Train model
 ```
-python model_train.py
+ex) train eigen_zhou splits
+python model_train.py --datatype kitti_eigen_zhou --pose_type separate
+
+ex) train kitti_benchmark spltis
+python model_train.py --datatype kitti_benchmark --pose_type separate
+
+ex) train cityscaeps_landau splits
+python model_train.py --datatype cityscapes_landau --pose_type separate
 ```
-# Will...
-1. Eigen split?  
 # Reference  
 [Offical Code](https://github.com/nianticlabs/monodepth2)  
+[KITTI Dataset](https://github.com/Doyosae/KITTIDataset)
+[Cityscaeps Dataset](https://github.com/Doyosae/CityscapesDataset)
