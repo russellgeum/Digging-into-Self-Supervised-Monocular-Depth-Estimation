@@ -66,4 +66,4 @@ python model_train.py --datatype cityscapes_landau --pose_type separate
 # Reference  
 [Offical Code](https://github.com/nianticlabs/monodepth2)  
 [KITTI Dataset](https://github.com/Doyosae/KITTIDataset)  
-[Cityscaeps Dataset](https://github.com/Doyosae/CityscapesDataset)
+[Cityscapes Dataset](https://github.com/Doyosae/CityscapesDataset)
