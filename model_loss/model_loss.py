@@ -89,6 +89,11 @@ class EdgeAwareSmoothLoss(nn.Module):
 
 
 
+###############################################################################################################
+###############################################################################################################
+
+
+
 class ReprojectionLoss(nn.Module):
     def __init__(self):
         super(ReprojectionLoss, self).__init__()
@@ -98,9 +103,9 @@ class ReprojectionLoss(nn.Module):
         absolute_difference = torch.abs(target - prediction)
         L1_loss             = absolute_difference.mean(1, True)
         ssim_loss           = self.ssim(prediction, target).mean(1, True)
+
         reprojection_loss   = 0.85 * ssim_loss + 0.15 * L1_loss
         return reprojection_loss
-
 
 
 class SmoothLoss(nn.Module):
@@ -110,6 +115,7 @@ class SmoothLoss(nn.Module):
 
     def forward(self, disp, color):
         mean_disp           = disp.mean(2, True).mean(3, True)
-        norm_disp           = disp / (mean_disp + 1e-7)
+        norm_disp           = disp / (mean_disp + 1e-5)
+
         edge_smooth_loss    = self.edge_aware_smooth(norm_disp, color)
         return edge_smooth_loss

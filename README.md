@@ -26,9 +26,9 @@ model_dataloader/
 model_layer/
 model_loss/
 model_save/
-model_logger.py
-model_parser.py
+model_test.py
 model_train.py
+model_parser.py
 model_utility.py
 ```
 # Usage
@@ -54,14 +54,22 @@ find dataset/ -name '*.png' | parallel 'convert -quality 92 -sampling-factor 2x2
 ```
 5. Train model
 ```
-ex) train eigen_zhou splits
 python model_train.py --datatype kitti_eigen_zhou --pose_type separate
 
-ex) train kitti_benchmark spltis
 python model_train.py --datatype kitti_benchmark --pose_type separate
+```
+6. Test model
+```
+(for kitti_eigen_benchmark)
+python model_test.py
+```
+# Eval
+```
+kitti_eigen_test
+abs_rel 0.115  sq_rel 0.828  rmse 4.695  rmse_log 0.200  a1 0.882  a2 0.961  a3 0.981
 
-ex) train cityscaeps_landau splits
-python model_train.py --datatype cityscapes_landau --pose_type separate
+kitti_eigen_benchmark_test
+abs_rel 0.115  sq_rel 0.818  rmse 4.675  rmse_log 0.198  a1 0.879  a2 0.962  a3 0.981
 ```
 # Reference  
 [Offical Code](https://github.com/nianticlabs/monodepth2)  

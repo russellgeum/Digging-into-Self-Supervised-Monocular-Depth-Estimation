@@ -32,13 +32,13 @@ def compute_depth_error(ground_truth, prediction):
     rmse      = (ground_truth - prediction) ** 2
     rmse      = torch.sqrt(rmse.mean())
     
-    log_rmse  = (torch.log(ground_truth) - torch.log(prediction)) ** 2
-    log_rmse  = torch.sqrt(log_rmse.mean())
+    rmse_log  = (torch.log(ground_truth) - torch.log(prediction)) ** 2
+    rmse_log  = torch.sqrt(rmse_log.mean())
 
     abs_rel   = torch.mean(torch.abs(ground_truth - prediction) / ground_truth)
     sqrt_rel  = torch.mean((ground_truth - prediction) ** 2 / ground_truth)
     
-    return a1, a2, a3, rmse, log_rmse, abs_rel, sqrt_rel
+    return abs_rel, sqrt_rel, rmse, rmse_log, a1, a2, a3
 
 
 def compute_depth_metric(inputs, outputs):
@@ -73,7 +73,6 @@ def compute_depth_metric(inputs, outputs):
 
     ground_depth  = ground_depth[mask]
     predict_depth = predict_depth[mask]
-    
     predict_depth *= torch.median(ground_depth) / torch.median(predict_depth)
     predict_depth = torch.clamp(predict_depth, min = 1e-3, max = 80)
 
