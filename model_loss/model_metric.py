@@ -73,9 +73,7 @@ def compute_depth_metric(inputs, outputs, lib = "torch"):
     Compute depth mterics, to allow monitoring during training
     This is not particularly accurate as it averages over the entire batch,
     So, It is only used to give an indication of validation performance
-    """
 
-    """
     1. 출력 딕셔너리에 있는 예측 뎁스를 GT 사이즈에 맞게 interpolate함
     2. 입력 딕셔너리에 있는 GT 뎁스를 불러오고 0 이상이면 True인 마스크를 만듬
     3. mask 크기만큼 crop_mask를 만들고 여기서 중앙 - 하단부 영역을 1로 만듬 (하단부가 공통으로 유효한 뎁스 영역이기 때문에)
