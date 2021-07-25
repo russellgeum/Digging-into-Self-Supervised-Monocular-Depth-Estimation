@@ -1,163 +1,154 @@
 import os
 import sys
-import cv2
-import numpy as np
+import argparse
 from tqdm import tqdm
 from pprint import pprint 
 import matplotlib.pyplot as plt
 
+import cv2
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.utils.data import Dataset
 from torch.utils.data import DataLoader
 
 from model_parser import *
 from model_utility import *
-
-from model_loss import *
-from model_layer import *
-from model_test import *
 from model_dataloader import *
+from model_layer import *
+from model_loss import *
+from model_test import *
 
 
-def disparity2depth(disp, min_depth, max_depth):
-    """
-    Convert network's sigmoid output into depth prediction
-    The formula for this conversion is given in the 'additional considerations'
-    section of the paper.
-    """
-    min_disp = 1 / max_depth
-    max_disp = 1 / min_depth
-    scaled_disp = min_disp + (max_disp - min_disp) * disp
-    depth    = 1 / scaled_disp
-    return scaled_disp, depth
 
 
-def compute_depth_errors(gt, pred):
-    """
-    Computation of error metrics between predicted and ground truth depths
-    """
-    thresh = torch.max((gt / pred), (pred / gt))
-    a1 = (thresh < 1.25     ).float().mean()
-    a2 = (thresh < 1.25 ** 2).float().mean()
-    a3 = (thresh < 1.25 ** 3).float().mean()
-
-    rmse = (gt - pred) ** 2
-    rmse = torch.sqrt(rmse.mean())
-
-    rmse_log = (torch.log(gt) - torch.log(pred)) ** 2
-    rmse_log = torch.sqrt(rmse_log.mean())
-
-    abs_rel = torch.mean(torch.abs(gt - pred) / gt)
-
-    sq_rel = torch.mean((gt - pred) ** 2 / gt)
-
-    return abs_rel, sq_rel, rmse, rmse_log, a1, a2, a3
+device   = 'cuda:0' if torch.cuda.is_available() else 'cpu'
+testpath = {
+    "kitti_benchmark": "./splits/kitti_test/kitti_benchmark_test_files.txt",
+    "kitti_eigen_benchmark": "./splits/kitti_test/kitti_eigen_benchmark_test_files.txt",
+    "kitti_eigen_test": "./splits/kitti_test/kitti_eigen_test_files.txt"}
 
 
-def compute_depth_losses(inputs, outputs):
-    """
-    Compute depth metrics, to allow monitoring during training
-
-    This isn't particularly accurate as it averages over the entire batch,
-    so is only used to give an indication of validation performance
-    """
-    depth_pred = outputs
-    depth_pred = torch.clamp(F.interpolate(
-        depth_pred, [375, 1242], mode="bilinear", align_corners=False), 1e-3, 80)
-    depth_pred = depth_pred.detach()
-
-    depth_gt = inputs[("depth", 0)]
-    mask = depth_gt > 0
-
-    # garg/eigen crop
-    crop_mask = torch.zeros_like(mask)
-    crop_mask[:, :, 153:371, 44:1197] = 1
-    mask = mask * crop_mask
-
-    depth_gt = depth_gt[mask]
-    depth_pred = depth_pred[mask]
-    depth_pred *= torch.median(depth_gt) / torch.median(depth_pred)
-
-    depth_pred = torch.clamp(depth_pred, min = 1e-3, max = 80)
-
-    depth_errors = compute_depth_errors(depth_gt, depth_pred)
-    return depth_errors
-
-
-def inference_for_eval(loader, encoder_weight, decoder_wiehgt, device):
-    MIN_DEPTH = 1e-3
-    MAX_DEPTH = 100
-    HEIGHT    = 375
-    WIDTH     = 1242
-    
-    metric      = ["abs_rel", "sq_rel", "rmse", "rmse_log", "a1", "a2", "a3"]
-    metric_dict = {}
-    metric_dict.update({key : [] for key in metric})
-
-    ### 
-    model_state_dict = {
-        "encoder": encoder_weight,
-        "decoder": decoder_wiehgt}
-    encoder_weight = torch.load(model_state_dict["encoder"])
-    decoder_weight = torch.load(model_state_dict["decoder"])
+def load_weights(args):
+    encoder_weights = torch.load(args.encoder_path)
+    decoder_weights = torch.load(args.decoder_path)
 
     model = {}
-    model["encoder"] = ResnetEncoder(18, None).to(device)
-    filtered_encoder = {
-        k: v for k, v in encoder_weight.items() if k in model["encoder"].state_dict()};
-    model["encoder"].load_state_dict(filtered_encoder)
-    model["encoder"].eval()
+    model["encoder"] = ResnetEncoder(18, False)
+    model["decoder"] = DepthDecoder(model["encoder"].num_ch_enc)
 
-    model["decoder"] = DepthDecoder(model["encoder"].num_ch_enc, range(4)).to(device)
-    model["decoder"].load_state_dict(decoder_weight)
-    model["decoder"].eval()
+    model["encoder"].load_state_dict(
+        {k: v for k, v in encoder_weights.items() if k in model["encoder"].state_dict()})
+    model["decoder"].load_state_dict(decoder_weights)
 
-    for _, inputs in tqdm(enumerate(loader)):
-        for key in inputs:
-            inputs[key] = inputs[key].to(device)
-        with torch.no_grad():
-            outputs   = model["decoder"](model["encoder"](inputs[("color", 0, 0)]))
-            dispairty = outputs[("disp", 0)]
-            dispairty = F.interpolate(
-                dispairty, (HEIGHT, WIDTH), mode = "bilinear", align_corners = False)
+    for key in model:
+        model[key].to(device)
+        model[key].eval();
+    return model
 
-            _, depth  = disparity2depth(dispairty, MIN_DEPTH, MAX_DEPTH)
-            errors    = compute_depth_losses(inputs, depth)
 
-        for index, name in enumerate(metric):
-            metric_dict[name].append(errors[index].item())
+def inference(args):
+    MIN_DEPTH = 1e-3
+    MAX_DEPTH = 80.0
+    filename = readlines(testpath["kitti_{}_test".format(args.splits)])
+    dataset  = KITTIMonoDataset("./dataset/kitti", filename, False, [0], ".jpg", 1)
+    loader   = DataLoader(dataset, batch_size = 16, shuffle = False, drop_last = False)
+    print(">>>   Testset length {}, Batch iteration {}".format(len(filename), loader.__len__()))
+
+    model = load_weights(args)
+    print(">>>   Loaded model")
+
+    # loader를 iter해서 이미지로 디스패리티를 출력하고
+    # GT 뎁스와 함께 넘파이 리스트로 변환
+    predction_list    = []
+    grount_truth_list = []
+    with torch.no_grad():
+        for data in loader:
+            color_image  = data[("color", 0, 0)].to(device)
+            ground_truth = data[("depth", 0)].cpu()[:, 0].numpy().astype(np.float32)
             
-    for key in metric:
-        metric_dict[key] = np.mean(metric_dict[key])
-        print("  {} {:0.3f}".format(key, metric_dict[key]), end = " ")
-    return outputs
+            outputs      = model["decoder"](model["encoder"](color_image))
+            pred_disp, _ = disparity2depth(outputs[("disp", 0)], MIN_DEPTH, MAX_DEPTH)
+            pred_disp    = pred_disp.cpu()[:, 0].numpy()
+            
+            predction_list.append(pred_disp)
+            grount_truth_list.append(ground_truth)
+    predction_list    = np.concatenate(predction_list)
+    grount_truth_list = np.concatenate(grount_truth_list)
+
+    errors_list = []
+    for index in range(len(predction_list)):
+        pred_disparity = predction_list[index]
+        ground_truth   = grount_truth_list[index]
+        height, width  = ground_truth.shape
+
+        pred_disparity = cv2.resize(pred_disparity, (width, height))
+        pred_depth     = 1 / pred_disparity
+
+        if args.splits == "eigen":
+            mask = np.logical_and(ground_truth > MIN_DEPTH, ground_truth < MAX_DEPTH)
+            crop = np.array([153, 371, 44, 1197]).astype(np.int32)
+            crop_mask = np.zeros(mask.shape)
+            crop_mask[crop[0]:crop[1], crop[2]:crop[3]] = 1
+            mask = np.logical_and(mask, crop_mask)
+        else:
+            mask = ground_truth > 0.
+        
+        pred_depth   = pred_depth[mask]
+        pred_depth   *= 1
+        ground_truth = ground_truth[mask]
+
+        if args.median == True:
+            pred_depth *= np.median(ground_truth) / np.median(pred_depth)
+
+        pred_depth[pred_depth < MIN_DEPTH] = MIN_DEPTH
+        pred_depth[pred_depth > MAX_DEPTH] = MAX_DEPTH
+        errors_list.append(compute_depth_error(ground_truth, pred_depth, "numpy"))
+    mean_errors = np.array(errors_list).mean(0)
+
+    print(">>>   abs_rel   sqrt_rel  rmse      rmse_log  a1        a2        a3")
+    print(">>>" + ("   {:4.3f}  " * 7).format(*mean_errors.tolist()))
+
 
 
 
 if __name__ == "__main__":
-    device   = 'cuda:0' if torch.cuda.is_available() else 'cpu'
-    testpath = {
-        "kitti_benchmark":       "./splits/kitti_test/kitti_benchmark_test_files.txt",
-        "kitti_eigen_benchmark": "./splits/kitti_test/kitti_eigen_benchmark_test_files.txt",
-        "kitti_eigen_test":      "./splits/kitti_test/kitti_eigen_test_files.txt"}
-
-    test_filename = readlines(testpath["kitti_eigen_benchmark"])
-    test_dataset  = KITTIMonoDataset("./dataset/kitti", test_filename, False, [0], ".jpg", 1)
-    test_loader   = DataLoader(test_dataset, batch_size = 16, shuffle = False, drop_last = True)
-    print(len(test_filename), test_loader.__len__())
-
-    encoder_path = {
-        "monodepth2_640x192": "./model_save/monodepth2/mono_640x192/encoder.pth",
-        "separate_benchmark": "./model_save/reproduce/encoder.pt"}
-    decoder_path = {
-        "monodepth2_640x192": "./model_save/monodepth2/mono_640x192/depth.pth",
-        "separate_benchmark": "./model_save/reproduce/decoder.pt"}
-
-    # Monodepth2
-    standard = inference_for_eval(
-        test_loader, encoder_path["monodepth2_640x192"], decoder_path["monodepth2_640x192"], device)
-
-    # Monodepth2-custom
-    custom1  = inference_for_eval(
-        test_loader, encoder_path["separate_benchmark"], decoder_path["separate_benchmark"], device)
+    weight = {
+        "monodepth2 192x640 with pt": {
+            "encoder": "./model_save/monodepth2/mono_640x192/encoder.pth",
+            "decoder": "./model_save/monodepth2/mono_640x192/depth.pth",},
+        "monodepth2 192x640 w/o pt": {
+            "encoder": "./model_save/monodepth2/mono_no_pt_640x192/encoder.pth",
+            "decoder": "./model_save/monodepth2/mono_no_pt_640x192/depth.pth"},
+        "separate_benchmark 192x640": {
+            "encoder": "./model_save/separate_benchmark/encoder20.pt",
+            "decoder": "./model_save/separate_benchmark/decoder20.pt"},
+        "separate_eigen_zhou 192x640": {
+            "encoder": "./model_save/separate_zhou1/encoder20.pt",
+            "decoder": "./model_save/separate_zhou1/decoder20.pt"}}
+    def options():
+        parser = argparse.ArgumentParser(description = "Input optional guidance for training")
+        parser.add_argument("--datapath",
+            default = "./dataset/kitti",
+            type = str,
+            help = "훈련 폴더가 있는 곳")
+        parser.add_argument("--splits",
+            default = "eigen",
+            type = str,
+            help = ["eigen", "eigen_benchmark"])
+        parser.add_argument("--encoder_path",
+            default = weight["separate_benchmark 192x640"]["encoder"],
+            type = str,
+            help = "Encoder weight path")
+        parser.add_argument("--decoder_path",
+            default = weight["separate_benchmark 192x640"]["decoder"],
+            type = str,
+            help = "Decoder weight path")
+        parser.add_argument("--median",
+            default = True,
+            type = str,
+            help = "median scaling option")
+        args = parser.parse_args()
+        return args
+    inference(options())

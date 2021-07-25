@@ -88,6 +88,8 @@ class trainer(object):
         self.filepath  = self.opt.splits + "/" + self.opt.datatype + "/{}_files.txt"
         train_filename = readlines(self.filepath.format("train"))
         valid_filename = readlines(self.filepath.format("val"))
+        train_filename = train_filename[:300]
+        valid_filename = valid_filename[:60]
 
         self.train_dataloader = self.definition_dataloader(
             train_filename, is_training = True, shuffle = True, mode = "train")
@@ -206,7 +208,7 @@ class trainer(object):
             
 
             self.model_scheduler.step()
-            # train, valid 배치를 다 돌았다면, 누적한 배치 데이터의 로스를 평균내서 에포크 딕셔너리에 저장
+            # 한 에포크를 다 돌았다면, 누적한 배치 데이터의 로스를 평균하여 에포크 딕셔너리에 저장
             for key in self.depth_losess_name:
                 epoch_train[key].append(np.mean(batch_train[key]))
                 epoch_valid[key].append(np.mean(batch_valid[key]))
@@ -490,7 +492,7 @@ class trainer(object):
     def compute_metric(self, inputs, outputs, loss, log_dict): # 배치 데이터마다 메트릭 계산
         log_dict["loss"].append(loss["loss"].detach().cpu().numpy())
 
-        depth_errors = compute_depth_metric(inputs, outputs)
+        depth_errors = compute_depth_metric(inputs, outputs, "torch")
         for index, metric in enumerate(self.depth_losess_name[1:]):
             log_dict[metric].append(depth_errors[index].cpu().numpy())
         return log_dict

@@ -89,11 +89,6 @@ class EdgeAwareSmoothLoss(nn.Module):
 
 
 
-###############################################################################################################
-###############################################################################################################
-
-
-
 class ReprojectionLoss(nn.Module):
     def __init__(self):
         super(ReprojectionLoss, self).__init__()
@@ -106,6 +101,7 @@ class ReprojectionLoss(nn.Module):
 
         reprojection_loss   = 0.85 * ssim_loss + 0.15 * L1_loss
         return reprojection_loss
+
 
 
 class SmoothLoss(nn.Module):

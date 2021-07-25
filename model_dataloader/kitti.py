@@ -1,13 +1,10 @@
 import os
 import copy
 import random
-import numpy as np
 
 import cv2
-import PIL.Image as pil
+import numpy as np
 from PIL import Image # using pillow-simd for increased speed
-from natsort import natsorted
-
 import torch
 from torchvision import transforms
 from torch.utils.data import Dataset
@@ -243,7 +240,7 @@ class KITTIMonoDataset(Dataset):
         3번 카메라를 쓰면 3번 카메라 좌표로 변환되어야 하지만 메트릭이 정확해지지 않음
         """
         depth = Point2Depth(
-            calib_path = calib_path, point_path = point_path, cam = self.side_map[side])
+            calib_path = calib_path, point_path = point_path, cam = self.side_map[side], vel_depth = False)
         depth = skimage.transform.resize(
                     depth, (1242, 375)[::-1], order = 0, preserve_range = True, mode = "constant")
         depth = np.reshape(depth, (depth.shape[0], depth.shape[1], 1))
@@ -296,7 +293,7 @@ class KITTIMonoDataset(Dataset):
         """
         calib_path, point_path   = self.get_point_path(folder_name, key_frame)
         depth                    = self.load_point(calib_path, point_path, side, do_flip)
-        input_data[("depth", 0)] = depth
+        input_data[("depth", 0)] = depth.astype(np.float32)
         return input_data
 
     def preprocessing_intrinsic(self, input_data):
@@ -360,6 +357,8 @@ class KITTIMonoDataset(Dataset):
         return len(self.filename)
 
 
+
+###################################################################################################################
 ###################################################################################################################
 ###################################################################################################################
 
@@ -587,7 +586,7 @@ class KITTIDataset(MonoDataset):
         color = self.loader(self.get_image_path(folder, frame_index, side))
 
         if do_flip:
-            color = color.transpose(pil.FLIP_LEFT_RIGHT)
+            color = color.transpose(Image.open.FLIP_LEFT_RIGHT)
         return color
 
 
@@ -653,8 +652,8 @@ class KITTIDepthDataset(KITTIDataset):
         depth_path = os.path.join(
             self.data_path, folder, "proj_depth/groundtruth/image_0{}".format(self.side_map[side]), f_str)
 
-        depth_gt = pil.open(depth_path)
-        depth_gt = depth_gt.resize(self.full_res_shape, pil.NEAREST)
+        depth_gt = Image.open(depth_path)
+        depth_gt = depth_gt.resize(self.full_res_shape, Image.open.NEAREST)
         depth_gt = np.array(depth_gt).astype(np.float32) / 256
 
         if do_flip:
