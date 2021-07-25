@@ -13,11 +13,11 @@ import torch.nn.functional as F
 from torch.utils.data import Dataset
 from torch.utils.data import DataLoader
 
-from model_loss import *
-from model_layer import *
-from model_dataloader import *
 from model_parser import *
 from model_utility import *
+from model_dataloader import *
+from model_layer import *
+from model_loss import *
 
 
 
@@ -88,8 +88,8 @@ class trainer(object):
         self.filepath  = self.opt.splits + "/" + self.opt.datatype + "/{}_files.txt"
         train_filename = readlines(self.filepath.format("train"))
         valid_filename = readlines(self.filepath.format("val"))
-        train_filename = train_filename[:300]
-        valid_filename = valid_filename[:60]
+        # train_filename = train_filename[:300]
+        # valid_filename = valid_filename[:60]
 
         self.train_dataloader = self.definition_dataloader(
             train_filename, is_training = True, shuffle = True, mode = "train")
