@@ -5,7 +5,7 @@ from __future__ import print_function
 import numpy as np
 import torch
 import torch.nn as nn
-import torch.nn.functional  as F
+import torch.nn.functional as F
 import torchvision.models as models
 import torch.utils.model_zoo as model_zoo
 
