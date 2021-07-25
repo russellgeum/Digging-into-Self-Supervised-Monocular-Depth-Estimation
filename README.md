@@ -32,6 +32,7 @@ model_parser.py
 model_utility.py
 ```
 # Usage
+### Setup KITTI Dataset
 1. Download Raw KITTI Dataset
 ```
 wget -i splits_kitti/archives2download.txt -P dataset/  
@@ -41,35 +42,41 @@ wget -i splits_kitti/archives2download.txt -P dataset/
 cd dataset
 unzip "*.zip"
 ```
-3. Install moreutils and parallel  
+### Install pakages
+1. Install moreutils and parallel  
 ```
 apt-get update -y
 apt-get install moreutils
 or
 apt-get install -y moreutils
 ```
-4. Convert from png to jpg
+2. Convert from png to jpg
 ```
 find dataset/ -name '*.png' | parallel 'convert -quality 92 -sampling-factor 2x2,1x1,1x1 {.}.png {.}.jpg && rm {}'
 ```
-5. Train model
+### Train and Test
+1. Training
 ```
-python model_train.py --datatype kitti_eigen_zhou --pose_type separate
-
-python model_train.py --datatype kitti_benchmark --pose_type separate
+python model_train.py --pose_type separate --datatype kitti_eigen_zhou
+python model_train.py --pose_type separate --datatype kitti_benchmark
 ```
-6. Test model
+2. Test
 ```
-(for kitti_eigen_benchmark)
 python model_test.py
 ```
-# Eval
+# Evaluation
 ```
-kitti_eigen_test
-abs_rel 0.115  sq_rel 0.828  rmse 4.695  rmse_log 0.200  a1 0.882  a2 0.961  a3 0.981
+kitti_eigen_zhou (monodepth2 original)
+abs_rel   sqrt_rel  rmse      rmse_log  a1        a2        a3
+0.119     0.938     4.906     0.197     0.872     0.957     0.980
 
-kitti_eigen_benchmark_test
-abs_rel 0.115  sq_rel 0.818  rmse 4.675  rmse_log 0.198  a1 0.879  a2 0.962  a3 0.981
+kitti_eigen_zhou (my code)
+abs_rel   sqrt_rel  rmse      rmse_log  a1        a2        a3
+0.125     0.977     4.992     0.202     0.861     0.955     0.980
+
+kitti_eigen_benchmark (my code)
+abs_rel   sqrt_rel  rmse      rmse_log  a1        a2        a3
+0.104     0.809     4.502     0.182     0.900     0.963     0.981
 ```
 # Reference  
 [Offical Code](https://github.com/nianticlabs/monodepth2)  
