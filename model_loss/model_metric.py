@@ -65,7 +65,7 @@ def compute_depth_error(ground_truth, prediction, lib = "numpy"):
         raise "lib arg is 'numpy' or 'torch'"
 
 
-def compute_depth_metric(inputs, outputs):
+def compute_depth_metric(inputs, outputs, lib = "torch"):
     """
     훈련할 때 사용 -> testing에는 사용하지 않음, 값의 차이가 발생
     입력 딕셔너리의 GT 뎁스와 출력 딕셔너리의 pred 뎁스에서
@@ -101,7 +101,8 @@ def compute_depth_metric(inputs, outputs):
     predict_depth *= torch.median(ground_depth) / torch.median(predict_depth)
     predict_depth = torch.clamp(predict_depth, min = 1e-3, max = 80)
 
-    detph_error   = compute_depth_error(ground_truth = ground_depth, prediction = predict_depth)
+    detph_error   = compute_depth_error(
+        ground_truth = ground_depth, prediction = predict_depth, lib = lib)
     return detph_error
 
 
