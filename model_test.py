@@ -44,7 +44,7 @@ def load_weights(args):
 
     for key in model:
         model[key].to(device)
-        model[key].eval();
+        model[key].eval()
     return model
 
 
@@ -63,8 +63,9 @@ def inference(args):
     # GT 뎁스와 함께 넘파이 리스트로 변환
     predction_list    = []
     grount_truth_list = []
+    return_result     = []
     with torch.no_grad():
-        for data in loader:
+        for data in tqdm(loader):
             color_image  = data[("color", 0, 0)].to(device)
             ground_truth = data[("depth", 0)].cpu()[:, 0].numpy().astype(np.float32)
             
@@ -72,13 +73,14 @@ def inference(args):
             pred_disp, _ = disparity2depth(outputs[("disp", 0)], MIN_DEPTH, MAX_DEPTH)
             pred_disp    = pred_disp.cpu()[:, 0].numpy()
             
+            return_result.append(outputs)
             predction_list.append(pred_disp)
             grount_truth_list.append(ground_truth)
     predction_list    = np.concatenate(predction_list)
     grount_truth_list = np.concatenate(grount_truth_list)
 
     errors_list = []
-    for index in range(len(predction_list)):
+    for index in tqmd(range(len(predction_list))):
         pred_disparity = predction_list[index]
         ground_truth   = grount_truth_list[index]
         height, width  = ground_truth.shape
@@ -109,6 +111,7 @@ def inference(args):
 
     print(">>>   abs_rel   sqrt_rel  rmse      rmse_log  a1        a2        a3")
     print(">>>" + ("   {:4.3f}  " * 7).format(*mean_errors.tolist()))
+    return return_result
 
 
 
@@ -125,8 +128,8 @@ if __name__ == "__main__":
             "encoder": "./model_save/separate_benchmark/encoder20.pt",
             "decoder": "./model_save/separate_benchmark/decoder20.pt"},
         "separate_eigen_zhou 192x640": {
-            "encoder": "./model_save/separate_zhou1/encoder20.pt",
-            "decoder": "./model_save/separate_zhou1/decoder20.pt"}}
+            "encoder": "./model_save/separate_eigen_zhou/encoder20.pt",
+            "decoder": "./model_save/separate_eigen_zhou/decoder20.pt"}}
     def options():
         parser = argparse.ArgumentParser(description = "Input optional guidance for training")
         parser.add_argument("--datapath",
@@ -138,11 +141,11 @@ if __name__ == "__main__":
             type = str,
             help = ["eigen", "eigen_benchmark"])
         parser.add_argument("--encoder_path",
-            default = weight["separate_benchmark 192x640"]["encoder"],
+            default = weight["separate_eigen_zhou 192x640"]["encoder"],
             type = str,
             help = "Encoder weight path")
         parser.add_argument("--decoder_path",
-            default = weight["separate_benchmark 192x640"]["decoder"],
+            default = weight["separate_eigen_zhou 192x640"]["decoder"],
             type = str,
             help = "Decoder weight path")
         parser.add_argument("--median",
@@ -151,4 +154,4 @@ if __name__ == "__main__":
             help = "median scaling option")
         args = parser.parse_args()
         return args
-    inference(options())
+    return_result = inference(options())
