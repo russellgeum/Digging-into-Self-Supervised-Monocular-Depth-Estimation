@@ -2,8 +2,6 @@ import os
 import sys
 import argparse
 from tqdm import tqdm
-from pprint import pprint 
-import matplotlib.pyplot as plt
 
 import cv2
 import numpy as np
@@ -18,7 +16,6 @@ from model_utility import *
 from model_dataloader import *
 from model_layer import *
 from model_loss import *
-from model_test import *
 
 
 
@@ -80,7 +77,7 @@ def inference(args):
     grount_truth_list = np.concatenate(grount_truth_list)
 
     errors_list = []
-    for index in tqmd(range(len(predction_list))):
+    for index in tqdm(range(len(predction_list))):
         pred_disparity = predction_list[index]
         ground_truth   = grount_truth_list[index]
         height, width  = ground_truth.shape
