@@ -8,6 +8,19 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
+
+def grid_sample(tensor, coords, padding_mode, align_corners):
+    return F.grid_sample(
+        tensor, coords, padding_mode = padding_mode, align_corners = align_corners)
+
+
+
+def interpolate(tensor, height, width, mode, align_corners):
+    return F.interpolate(
+        tensor, [height, width], mode = mode, align_corners = align_corners)
+
+
+
 def disparity2depth(disparity, min_depth, max_depth):
     """
     disparity, min_depth, max_depth를 받아서 depth를 계산한다.
@@ -19,6 +32,7 @@ def disparity2depth(disparity, min_depth, max_depth):
     scaled_disp = min_disp + (max_disp - min_disp) * disparity
     depth       = 1 / scaled_disp
     return scaled_disp, depth
+
 
 
 def vector2translation(translation_vector): # translation_vector = [tx, ty, tz]
@@ -40,6 +54,7 @@ def vector2translation(translation_vector): # translation_vector = [tx, ty, tz]
     # N C H W이므로 0, 1, 2 행의 성분 중 마지막 3열에 해당하는 칼럼만 추출
     T[:, :3, 3, None] = t
     return T   
+
 
 
 def angle2rotation(anlge_axis): # anlge_axis == (Ux, Uy, Uz)
@@ -102,6 +117,7 @@ def angle2rotation(anlge_axis): # anlge_axis == (Ux, Uy, Uz)
     return rotation
 
 
+
 def param2matrix(axisangle, translation, invert=False):
     """
     args:
@@ -135,6 +151,7 @@ def param2matrix(axisangle, translation, invert=False):
 
 def upsample(tensor):
     return F.interpolate(tensor, scale_factor = 2, mode = "nearest")
+
 
 
 class ConvBlock(nn.Module):

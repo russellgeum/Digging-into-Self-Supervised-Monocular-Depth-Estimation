@@ -11,20 +11,19 @@ import torch.nn.functional as F
 from torch.utils.data import Dataset
 from torch.utils.data import DataLoader
 
-from model_parser import *
 from model_utility import *
-from model_dataloader import *
+from model_option import *
+from model_loader import *
 from model_layer import *
 from model_loss import *
 
 
-
-
 device   = 'cuda:0' if torch.cuda.is_available() else 'cpu'
 testpath = {
-    "kitti_benchmark": "./splits/kitti_test/kitti_benchmark_test_files.txt",
+    "kitti_benchmark":       "./splits/kitti_test/kitti_benchmark_test_files.txt",
     "kitti_eigen_benchmark": "./splits/kitti_test/kitti_eigen_benchmark_test_files.txt",
-    "kitti_eigen_test": "./splits/kitti_test/kitti_eigen_test_files.txt"}
+    "kitti_eigen_test":      "./splits/kitti_test/kitti_eigen_test_files.txt"}
+
 
 
 def load_weights(args):
@@ -38,56 +37,68 @@ def load_weights(args):
     model["encoder"].load_state_dict(
         {k: v for k, v in encoder_weights.items() if k in model["encoder"].state_dict()})
     model["decoder"].load_state_dict(decoder_weights)
-
-    for key in model:
-        model[key].to(device)
-        model[key].eval()
+    
+    model.update({key: model[key].to(device) for key in model})
+    model.update({key: model[key].eval() for key in model})
     return model
 
 
+
+def load_ground_truth(args, lines):
+    ground_truth_list = []
+    for line in lines:
+        folder, frame_id, _ = line.split()
+        frame_id            = int(frame_id)
+        calibration_path    = os.path.join(args.datapath, folder.split("/")[0])
+        velo_filename       = os.path.join(
+            args.datapath, folder, "velodyne_points/data", "{:010d}.bin".format(frame_id))
+        ground_truth = Point2Depth(calibration_path, velo_filename, 2, True)
+        ground_truth_list.append(ground_truth.astype(np.float32))
+    return ground_truth_list
+
+
+
 def inference(args):
-    MIN_DEPTH = 1e-3
-    MAX_DEPTH = 80.0
-    filename = readlines(testpath["kitti_{}_test".format(args.splits)])
-    dataset  = KITTIMonoDataset("./dataset/kitti", filename, False, [0], ".jpg", 1)
-    loader   = DataLoader(dataset, batch_size = 16, shuffle = False, drop_last = False)
+    MIN_DEPTH = 0.1
+    MAX_DEPTH = 100.0
+    filename  = readlines(testpath["kitti_{}_test".format(args.splits)])
+    dataset   = KITTIMonoDataset("./dataset/kitti", filename, False, [0], ".jpg", 192, 640, 4)
+    loader    = DataLoader(dataset, batch_size = 16, shuffle = False, drop_last = False)
     print(">>>   Testset length {}, Batch iteration {}".format(len(filename), loader.__len__()))
 
     model = load_weights(args)
     print(">>>   Loaded model")
 
-    # loader를 iter해서 이미지로 디스패리티를 출력하고
-    # GT 뎁스와 함께 넘파이 리스트로 변환
-    predction_list    = []
-    grount_truth_list = []
+    disparity_list    = []
     return_result     = []
+    ground_truth_list = load_ground_truth(args, filename)
+    print(">>>   Loaded ground truth depth")
+
+
     with torch.no_grad():
         for data in tqdm(loader):
             color_image  = data[("color", 0, 0)].to(device)
-            ground_truth = data[("depth", 0)].cpu()[:, 0].numpy().astype(np.float32)
-            
             outputs      = model["decoder"](model["encoder"](color_image))
             pred_disp, _ = disparity2depth(outputs[("disp", 0)], MIN_DEPTH, MAX_DEPTH)
             pred_disp    = pred_disp.cpu()[:, 0].numpy()
             
             return_result.append(outputs)
-            predction_list.append(pred_disp)
-            grount_truth_list.append(ground_truth)
-    predction_list    = np.concatenate(predction_list)
-    grount_truth_list = np.concatenate(grount_truth_list)
+            disparity_list.append(pred_disp)
+    disparity_list    = np.concatenate(disparity_list)
+
 
     errors_list = []
-    for index in tqdm(range(len(predction_list))):
-        pred_disparity = predction_list[index]
-        ground_truth   = grount_truth_list[index]
+    for index in tqdm(range(len(disparity_list))):
+        pred_disparity = disparity_list[index]
+        ground_truth   = ground_truth_list[index]
         height, width  = ground_truth.shape
 
         pred_disparity = cv2.resize(pred_disparity, (width, height))
         pred_depth     = 1 / pred_disparity
 
-        if args.splits == "eigen":
-            mask = np.logical_and(ground_truth > MIN_DEPTH, ground_truth < MAX_DEPTH)
-            crop = np.array([153, 371, 44, 1197]).astype(np.int32)
+        if args.splits == "eigen_zhou":
+            mask      = np.logical_and(ground_truth > MIN_DEPTH, ground_truth < MAX_DEPTH)
+            crop      = np.array([153, 371, 44, 1197]).astype(np.int32)
             crop_mask = np.zeros(mask.shape)
             crop_mask[crop[0]:crop[1], crop[2]:crop[3]] = 1
             mask = np.logical_and(mask, crop_mask)
@@ -114,41 +125,56 @@ def inference(args):
 
 
 if __name__ == "__main__":
+    """
+    original monodepth2 w/o min_projection
+    0.117     0.878     4.846     0.196     0.870    0.957      0.980
+    original monodepth2 full
+    0.115     0.903     4.863     0.193     0.877    0.959      0.981
+
+    # separate_eigenzhou_ANTI
+    # 0.123     0.939     5.004     0.201     0.862     0.954     0.979
+    # separate_eigenzhou_NEAR
+    # 0.118     0.916     4.865     0.194     0.871     0.958     0.981
+
+    LANC
+    0.129     0.994     5.096     0.208     0.854     0.951     0.978
+    AREA
+    """
+
+    epo    = 21
     weight = {
         "monodepth2 192x640 with pt": {
             "encoder": "./model_save/monodepth2/mono_640x192/encoder.pth",
             "decoder": "./model_save/monodepth2/mono_640x192/depth.pth",},
-        "monodepth2 192x640 w/o pt": {
-            "encoder": "./model_save/monodepth2/mono_no_pt_640x192/encoder.pth",
-            "decoder": "./model_save/monodepth2/mono_no_pt_640x192/depth.pth"},
-        "separate_benchmark 192x640": {
+        "separate_benchmark": {
             "encoder": "./model_save/separate_benchmark/encoder20.pt",
             "decoder": "./model_save/separate_benchmark/decoder20.pt"},
-        "separate_eigen_zhou 192x640": {
-            "encoder": "./model_save/separate_eigen_zhou/encoder20.pt",
-            "decoder": "./model_save/separate_eigen_zhou/decoder20.pt"}}
-    def options():
-        parser = argparse.ArgumentParser(description = "Input optional guidance for training")
-        parser.add_argument("--datapath",
-            default = "./dataset/kitti",
-            type = str,
-            help = "훈련 폴더가 있는 곳")
-        parser.add_argument("--splits",
-            default = "eigen",
-            type = str,
-            help = ["eigen", "eigen_benchmark"])
-        parser.add_argument("--encoder_path",
-            default = weight["separate_eigen_zhou 192x640"]["encoder"],
-            type = str,
-            help = "Encoder weight path")
-        parser.add_argument("--decoder_path",
-            default = weight["separate_eigen_zhou 192x640"]["decoder"],
-            type = str,
-            help = "Decoder weight path")
-        parser.add_argument("--median",
-            default = True,
-            type = str,
-            help = "median scaling option")
-        args = parser.parse_args()
-        return args
-    return_result = inference(options())
+
+        "lanc_inter_false": {
+            "encoder": "./model_save/lanc_inter_false/encoder{}.pt".format(epo),
+            "decoder": "./model_save/lanc_inter_false/decoder{}.pt".format(epo)},
+        "lanc_inter_true": {
+            "encoder": "./model_save/lanc_inter_true/encoder{}.pt".format(epo),
+            "decoder": "./model_save/lanc_inter_true/decoder{}.pt".format(epo)}}
+
+    for name in ["lanc_inter_false", "lanc_inter_true"]:
+        def options():
+            parser = argparse.ArgumentParser(description = "Input optional guidance for training")
+            parser.add_argument("--datapath",
+                default = "./dataset/kitti",
+                type = str, help = "훈련 폴더가 있는 곳")
+            parser.add_argument("--splits",
+                default = "eigen",
+                type = str, help = ["eigen_zhou", "eigen_benchmark"])
+            parser.add_argument("--encoder_path",
+                default = weight[name]["encoder"],
+                type = str, help = "Encoder weight path")
+            parser.add_argument("--decoder_path",
+                default = weight[name]["decoder"],
+                type = str, help = "Decoder weight path")
+            parser.add_argument("--median",
+                default = True,
+                type = str, help = "median scaling option")
+            args = parser.parse_args()
+            return args
+        return_result = inference(options())

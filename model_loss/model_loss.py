@@ -42,9 +42,9 @@ class SSIM(nn.Module):
 
 
 
-class EdgeAwareSmoothLoss(nn.Module):
+class EdgeAwareSmooth(nn.Module):
     def __init__(self):
-        super(EdgeAwareSmoothLoss, self).__init__()
+        super(EdgeAwareSmooth, self).__init__()
         """
         Edge-aware smooth loss
         disparity and image ~ N C H W
@@ -107,11 +107,10 @@ class ReprojectionLoss(nn.Module):
 class SmoothLoss(nn.Module):
     def __init__(self):
         super(SmoothLoss, self).__init__()
-        self.edge_aware_smooth = EdgeAwareSmoothLoss()
+        self.edge_aware_smooth = EdgeAwareSmooth()
 
     def forward(self, disp, color):
         mean_disp           = disp.mean(2, True).mean(3, True)
-        norm_disp           = disp / (mean_disp + 1e-5)
-
+        norm_disp           = disp / (mean_disp + 1e-7)
         edge_smooth_loss    = self.edge_aware_smooth(norm_disp, color)
         return edge_smooth_loss

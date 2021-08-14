@@ -3,6 +3,7 @@ import re
 import sys
 import time
 import json
+import random
 import numpy as np
 from scipy import misc
 from collections import Counter
@@ -10,6 +11,18 @@ from collections import Counter
 import torch
 import torch.nn as nn
 import matplotlib.pyplot as plt
+
+
+
+# pytorch randomnetss
+def pytorch_randomness(random_seed = 42):
+    torch.backends.cudnn.benchmark = True
+    torch.backends.cudnn.deterministic = False
+    random.seed(random_seed)
+    np.random.seed(random_seed)
+    torch.manual_seed(random_seed)
+    torch.cuda.manual_seed(random_seed)
+    torch.cuda.manual_seed_all(random_seed) # if use multi-GPU
 
 
 
@@ -199,8 +212,6 @@ def Point2Depth(calib_path, point_path, cam = 2, vel_depth = False):
 
 
 
-
-
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 CITYSCAPES 데이터셋을 위한 함수
 def removeline_city
@@ -221,93 +232,95 @@ def save_lines(filename, datapath: str):
     
 
 
-
-
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 기타 모듈
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
-def tensor2numpy(tensor): # 토치 텐서를 넘파이로
-    return tensor.numpy()
+class tools(object):
+    def __init__(self):
+        pass
+
+    @staticmethod
+    def tensor2numpy(tensor): # 토치 텐서를 넘파이로
+        return tensor.numpy()
 
 
-def numpy2tensor(numpy): # 넘파이를 토치 텐서로
-    return torch.from_numpy(numpy)
+    @staticmethod
+    def numpy2tensor(numpy): # 넘파이를 토치 텐서로
+        return torch.from_numpy(numpy)
 
 
-def parameter_number(model): # 모델의 파라미터를 계산하는 함수
-    num_params = 0
-    for tensor in list(model.parameters()):
-        tensor      = tensor.view(-1)
-        num_params += len(tensor)
-    print(num_params)
+    @staticmethod
+    def parameter_number(model): # 모델의 파라미터를 계산하는 함수
+        raise NotImplementedError
 
 
-def sample_dataset(dataloader): # 모델 데이터로터에서 배치 샘플 하나를 추출
-    test = 0
-    start = time.time()
-    for index, data in enumerate(dataloader):
-        test = data
-        if index == 0:
-            break  
-    print("batch sampling time:  ", time.time() - start)
-    return test
+    @staticmethod
+    def sample_dataset(dataloader): # 모델 데이터로터에서 배치 샘플 하나를 추출
+        test = []
+        start = time.time()
+        for index, data in tqdm(enumerate(dataloader)):
+            test.append(data)
+        print("batch sampling time:  ", time.time() - start)
+        return test
 
 
-def show_image(image, option = "torch", size = (10, 4), cmap = "magma", show_disp = True):
-    """
-    토치나 텐서플로우 형태의 이미지를 받아서 이미지를 띄우는 함수
-    Args: tensor type
-            Pytorch:    [B, N, H, W]
-            Tensorflow: [B, H, W, C]
-    """
-    plt.rcParams["figure.figsize"] = size
+    @staticmethod
+    def show_image(image, option = "torch", size = (10, 4), cmap = "magma", show_disp = True):
+        """
+        토치나 텐서플로우 형태의 이미지를 받아서 이미지를 띄우는 함수
+        Args: tensor type
+                Pytorch:    [B, N, H, W]
+                Tensorflow: [B, H, W, C]
+        """
+        plt.rcParams["figure.figsize"] = size
 
-    if option == "torch":
-        if image.shape[0] == 3 or len(image.shape) == 3:
-            image = np.transpose(image, (1, 2, 0))
+        if option == "torch":
+            if image.shape[0] == 3 or len(image.shape) == 3:
+                image = np.transpose(image, (1, 2, 0))
+            else:
+                image = np.squeeze(image, axis = 0)
+                image = np.transpose(image, (1, 2, 0))
+
+        elif option == "tensorflow": # N H W C
+            if len(image.shape) == 3:
+                pass
+            else:
+                image = np.squeeze(image, axis = 3)
+
+        """
+        uint8 -> float32로 바꾸면 엄청 큰 정수 단위의 float32가 됨
+        따리서 255.로 나누어 주는 것이 중요
+        그리고 cv2.imread로 불러온 이미지를 plt.imshow로 띄울때는 cv2.COLOR_BGR2RGB
+        """
+        if show_disp:
+            plt.imshow(image, cmap = cmap, vmax = np.percentile(image, 95))
+            plt.axis('off')
+            plt.show()
         else:
-            image = np.squeeze(image, axis = 0)
-            image = np.transpose(image, (1, 2, 0))
+            plt.imshow(image, cmap = cmap)
+            plt.axis('off')
+            plt.show()
 
-    elif option == "tensorflow": # N H W C
-        if len(image.shape) == 3:
-            pass
-        else:
-            image = np.squeeze(image, axis = 3)
 
-    """
-    uint8 -> float32로 바꾸면 엄청 큰 정수 단위의 float32가 됨
-    따리서 255.로 나누어 주는 것이 중요
-    그리고 cv2.imread로 불러온 이미지를 plt.imshow로 띄울때는 cv2.COLOR_BGR2RGB
-    """
-    if show_disp:
-        plt.imshow(image, cmap = cmap, vmax = np.percentile(image, 95))
-        plt.axis('off')
+    @staticmethod
+    def show_graph(data, xlabel, ylabel, title, color, marker, linestyle):
+        """
+        data:   np.array
+        xlabel: str
+        ylabel: str
+        title:  str
+        color:  str
+        marker: "o" or 
+        """
+        plt.rcParams["figure.figsize"] = (10, 6)
+        plt.rcParams['lines.linewidth'] = 1.5
+        plt.rcParams['axes.grid'] = True 
+        plt.rc('font', size = 10)        # 기본 폰트 크기
+        plt.rc('axes', labelsize = 15)   # x,y축 label 폰트 크기
+        plt.rc('figure', titlesize = 15) # figure title 폰트 크기
+
+        plt.xlabel(xlabel)
+        plt.ylabel(ylabel)
+        plt.title(title)
+        plt.plot(data, c = color, marker = marker, linestyle = linestyle)
         plt.show()
-    else:
-        plt.imshow(image, cmap = cmap)
-        plt.axis('off')
-        plt.show()
-
-
-def one_graph(data, xlabel, ylabel, title, color, marker, linestyle):
-    """
-    data: np.array
-    xlabel: str
-    ylabel: str
-    title: str
-    color: str
-    marker: "o" or 
-    """
-    plt.rcParams["figure.figsize"] = (10, 6)
-    plt.rcParams['lines.linewidth'] = 1.5
-    plt.rcParams['axes.grid'] = True 
-    plt.rc('font', size = 10)        # 기본 폰트 크기
-    plt.rc('axes', labelsize = 15)   # x,y축 label 폰트 크기
-    plt.rc('figure', titlesize = 15) # figure title 폰트 크기
-
-    plt.xlabel(xlabel)
-    plt.ylabel(ylabel)
-    plt.title(title)
-    plt.plot(data, c = color, marker = marker, linestyle = linestyle)
-    plt.show()
