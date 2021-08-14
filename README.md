@@ -22,14 +22,15 @@ dataset/
     2011_09_26/
     ...
     ...
-model_dataloader/
+model_loader/
 model_layer/
 model_loss/
+model_tool/
 model_save/
-model_test.py
-model_train.py
-model_parser.py
 model_utility.py
+model_option.py
+model_train.py
+model_test.py
 ```
 # Usage
 ### Setup KITTI Dataset
