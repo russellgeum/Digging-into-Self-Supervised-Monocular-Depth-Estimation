@@ -16,6 +16,16 @@ from model_option import *
 from model_loader import *
 from model_layer import *
 from model_loss import *
+# 메트릭 디버깅을 위해 확인한 요소
+# 1. 포인트 클라우드 interpolation (0으로 줄 것, 완료)
+# 2. RGB 이미지 interpolation (3: cv2.INTER_AREA -> 4 : cv2.INTER_LANCOSZ4)
+# 3. 프레임 아이디 탐색에서 키 프레임을 제외하는 것 ([1:]을 붙여서 할 것)
+# 4. 로스를 정확히 구현 (완료)
+# 5. 데이터 로더의 차이 (완료)
+# 6. F.interpoltae의 align_corners 옵션은 False로 줄 것
+# 7. F.grid_sample의 align_corners 옵션은 True로 줄 것
+# 8. training에서 쓰던 F.interpolation의 성능 평가가 정확하지 않음 -> validation 용도
+
 
 
 device   = 'cuda:0' if torch.cuda.is_available() else 'cpu'
