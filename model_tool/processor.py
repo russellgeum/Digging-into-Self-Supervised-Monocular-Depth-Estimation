@@ -96,7 +96,7 @@ class compute(object):
             elif self.opt.pose_type == "separate":
                 all_frames = {frame_id: inputs[("color_aug", frame_id, 0)] for frame_id in self.opt.frame_ids}
 
-                for frame_id in self.opt.frame_ids[1:]:
+                for frame_id in self.opt.frame_ids[1: ]:
                     if frame_id < 0:
                         pose_inputs = torch.cat([all_frames[frame_id], all_frames[0]], dim = 1)
                     else:
@@ -132,8 +132,10 @@ class compute(object):
     def depth2warping(self, inputs, outputs, setting): # 뎁스 계산
         for scale in self.opt.scales:
             disparity = outputs[("disp", scale)]
-            disparity = interpolate(disparity, self.opt.height, self.opt.width, "bilinear", False)
-            _, depth  = disparity2depth(disparity, self.opt.min_depth, self.opt.max_depth)
+            disparity = interpolate(
+                disparity, self.opt.height, self.opt.width, "bilinear", False)
+            _, depth  = disparity2depth(
+                disparity, self.opt.min_depth, self.opt.max_depth)
             outputs[("depth", 0, scale)] = depth # saving depth for depth eval
 
             for frame_id in self.opt.frame_ids[1: ]:
@@ -151,7 +153,7 @@ class compute(object):
                 camera_coords = setting.model["inv_projection"](depth, inputs[("inv_K", 0)])
                 frame_coords  = setting.model["for_projection"](camera_coords, inputs[("K", 0)], transformation)
                 outputs[("warp_color", frame_id, scale)] = grid_sample(
-                    inputs[("color", frame_id, 0)], frame_coords, "border", False)
+                    inputs[("color", frame_id, 0)], frame_coords, "border", True)
         return inputs, outputs # outputs에 "depth", warp_color" 키 값들을 가지고 리턴
 
 
