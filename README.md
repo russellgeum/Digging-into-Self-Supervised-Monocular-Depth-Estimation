@@ -67,17 +67,14 @@ python model_test.py
 ```
 # Evaluation
 ```
-kitti_eigen_zhou (monodepth2 original)
+kitti eigen splits test
+monodepth2 original
 abs_rel   sqrt_rel  rmse      rmse_log  a1        a2        a3
-0.119     0.938     4.906     0.197     0.872     0.957     0.980
+0.116     0.939     4.904     0.194     0.877     0.959     0.981
 
-kitti_eigen_zhou (my code)
+my code
 abs_rel   sqrt_rel  rmse      rmse_log  a1        a2        a3
-0.125     0.977     4.992     0.202     0.861     0.955     0.980
-
-kitti_eigen_benchmark (my code)
-abs_rel   sqrt_rel  rmse      rmse_log  a1        a2        a3
-0.104     0.809     4.502     0.182     0.900     0.963     0.981
+0.116     0.906     4.884     0.193     0.874     0.958     0.981
 ```
 # Reference  
 [Offical Code](https://github.com/nianticlabs/monodepth2)  
