@@ -1,2 +1,2 @@
-from .kitti import KITTIMonoDataset
-from .kitti import KITTIRAWDataset
+from .kitti_mono import KITTIMonoDataset
+from .kitti_mono import KITTIRAWDataset

@@ -14,6 +14,7 @@ from torch.utils.data import DataLoader
 from model_layer import *
 
 
+
 cv2.setNumThreads(0)
 def compute_depth_error(ground_truth, prediction, lib = "numpy"):
     """
@@ -63,6 +64,7 @@ def compute_depth_error(ground_truth, prediction, lib = "numpy"):
         return abs_rel, sqrt_rel, rmse, rmse_log, a1, a2, a3
     else:
         raise "lib arg is 'numpy' or 'torch'"
+
 
 
 def compute_depth_metric(inputs, outputs, lib = "torch"):

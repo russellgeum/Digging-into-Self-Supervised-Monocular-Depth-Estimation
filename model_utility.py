@@ -14,28 +14,6 @@ import matplotlib.pyplot as plt
 
 
 
-# pytorch randomnetss
-def pytorch_randomness(random_seed = 42):
-    torch.backends.cudnn.benchmark = True
-    torch.backends.cudnn.deterministic = False
-    random.seed(random_seed)
-    np.random.seed(random_seed)
-    torch.manual_seed(random_seed)
-    torch.cuda.manual_seed(random_seed)
-    torch.cuda.manual_seed_all(random_seed) # if use multi-GPU
-
-
-
-"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
-KITTI 데이터셋을 위한 함수 모듈
-def readlines split 파일을 읽어들이는 함수
-def removefile 레거시 splits에서 n개 프레임 이상을 쓰기 위해 프레임 인덱스가 n 이하인 파일은 제거하는 함수
-def read_cam2cam # 카메라 캘리브레이션 파일을 읽는 함수
-def read_velo2cam # 벨로다인 캘리브레이션 파일을 읽는 함수
-def read_velodyne_points # 포인트 클라우드를 로드하는 함수
-def sub2ind
-def Point2Depth # 실제로 쓰는 함수
-"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 def readlines(datapath):
     # Read all the lines in a text file and return as a list
     with open(datapath, 'r') as f:
@@ -43,11 +21,13 @@ def readlines(datapath):
     return lines
 
 
+
 def savelines(filename, datapath: str):
     f = open(datapath, "w")
     for data in filename:
         f.write(data + "\n") 
     f.close()
+
 
 
 def removelines(datapath, filename, frame_ids):
@@ -74,6 +54,7 @@ def removelines(datapath, filename, frame_ids):
     return modified_key
 
 
+
 def read_cam2cam(path):
     data = {}
     with open(path, "r") as f:
@@ -96,6 +77,7 @@ def read_cam2cam(path):
     identity_l = identity_l.astype(np.float32)
     identity_r = identity_r.astype(np.float32)
     return identity_l, identity_r
+
 
 
 def read_velo2cam(path):
@@ -121,6 +103,7 @@ def read_velo2cam(path):
     return data
 
 
+
 def read_velodyne_points(filename):
     """
     Load 3D point cloud from KITTI file format
@@ -131,6 +114,7 @@ def read_velodyne_points(filename):
     return points
 
 
+
 def sub2ind(matrixSize, rowSub, colSub):
     """
     Convert row, col matrix subscripts to linear indices
@@ -139,7 +123,8 @@ def sub2ind(matrixSize, rowSub, colSub):
     return rowSub * (n-1) + colSub - 1
 
 
-def Point2Depth(calib_path, point_path, cam = 2, vel_depth = False):
+
+def point2depth(calib_path, point_path, cam = 2, vel_depth = False):
     """
     캘리브레이션 경로와 벨로다인 파일 경로를 읽어서 뎁스 맵을 만드는 함수
     Args:
@@ -209,35 +194,23 @@ def Point2Depth(calib_path, point_path, cam = 2, vel_depth = False):
 
     depth[depth < 0] = 0
     return depth
-
-
-
-"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
-CITYSCAPES 데이터셋을 위한 함수
-def removeline_city
-def 
-"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
-def read_lines(datapath):
-    file = open(datapath, "r")
-    lines = file.readlines()
-    lines = [line.rstrip(" \n") for line in lines]
-    return lines
-
-
-def save_lines(filename, datapath: str):
-    f = open(datapath, "w")
-    for data in filename:
-        f.write(data + "\n") 
-    f.close()
     
 
 
-"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
-기타 모듈
-"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 class tools(object):
     def __init__(self):
         pass
+
+    @staticmethod
+    # pytorch randomnetss
+    def pytorch_randomness(random_seed = 42):
+        torch.backends.cudnn.benchmark = True
+        torch.backends.cudnn.deterministic = False
+        random.seed(random_seed)
+        np.random.seed(random_seed)
+        torch.manual_seed(random_seed)
+        torch.cuda.manual_seed(random_seed)
+        torch.cuda.manual_seed_all(random_seed) # if use multi-GPU
 
     @staticmethod
     def tensor2numpy(tensor): # 토치 텐서를 넘파이로

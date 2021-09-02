@@ -14,10 +14,10 @@ def options():
         default = "kitti_eigen_zhou",
         type = str, help = ["kitti_benchmark", "kitti_eigen_full", "kitti_eigen_zhou"])
     parser.add_argument("--epoch",
-        default = 30,
+        default = 24,
         type = int, help = "모델 에포크 수")
     parser.add_argument("--batch",
-        default = 36,
+        default = 12,
         type = int, help = "모델 배치 사이즈")
     parser.add_argument("--prepetch",
         default = 2,

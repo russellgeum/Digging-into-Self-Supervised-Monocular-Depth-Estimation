@@ -30,7 +30,7 @@ class compute(object):
             self.num_pose_frames = 2
 
 
-    def forward_network(self, inputs, outputs, setting):
+    def forward_depth(self, inputs, outputs, setting):
         for key in inputs:
             inputs[key] = inputs[key].to(self.device)
 
@@ -54,7 +54,7 @@ class compute(object):
         return inputs, outputs
 
 
-    def pose_estimation(self, inputs, outputs, setting):
+    def forward_pose(self, inputs, outputs, setting):
         """
         포즈를 계산하는 함수
         프레임 아이디가 [0, -2, -1, 1, 2] 이면 [-2, -1, 1, 2]를 순회해서
@@ -129,7 +129,7 @@ class compute(object):
         return inputs, outputs  # outputs에 "R", "T", "cam2cam" 키를 가지고 나옴
 
 
-    def depth2warping(self, inputs, outputs, setting): # 뎁스 계산
+    def image2warping(self, inputs, outputs, setting): # 뎁스 계산
         for scale in self.opt.scales:
             disparity = outputs[("disp", scale)]
             disparity = interpolate(
@@ -157,7 +157,7 @@ class compute(object):
         return inputs, outputs # outputs에 "depth", warp_color" 키 값들을 가지고 리턴
 
 
-    def loss_summation(self, inputs, outputs, setting):
+    def compute_loss(self, inputs, outputs, setting):
         total_loss = 0
         for scale in self.opt.scales: # 0 1 2 3
             scale_loss = 0

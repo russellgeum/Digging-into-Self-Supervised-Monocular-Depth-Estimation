@@ -58,8 +58,7 @@ find dataset/ -name '*.png' | parallel 'convert -quality 92 -sampling-factor 2x2
 ### Train and Test
 1. Training
 ```
-python model_train.py --pose_type separate --datatype kitti_eigen_zhou
-python model_train.py --pose_type separate --datatype kitti_benchmark
+python model_train.py --pose_type separate --datatype kitti_eigen_zhou --batch 12
 ```
 2. Test
 ```
@@ -74,7 +73,8 @@ abs_rel   sqrt_rel  rmse      rmse_log  a1        a2        a3
 
 my code
 abs_rel   sqrt_rel  rmse      rmse_log  a1        a2        a3
-0.116     0.906     4.884     0.193     0.874     0.958     0.981
+0.114     0.924     4.837     0.193     0.878     0.959     0.980
+0.115     0.925     4.841     0.193     0.877     0.959     0.980
 ```
 # Reference  
 [Offical Code](https://github.com/nianticlabs/monodepth2)  

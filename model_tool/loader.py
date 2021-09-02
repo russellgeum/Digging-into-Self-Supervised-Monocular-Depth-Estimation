@@ -27,6 +27,7 @@ class setting(object):
         self.filepath  = opt.splits + "/" + opt.datatype + "/{}_files.txt"
         train_filename = readlines(self.filepath.format("train"))
         valid_filename = readlines(self.filepath.format("val"))
+        train_filename = train_filename + valid_filename
 
         self.train_dataloader = self.load_dataloader(train_filename, True, True)
         self.valid_dataloader = self.load_dataloader(valid_filename, False, False)
@@ -52,6 +53,8 @@ class setting(object):
         if self.dataset == "kitti":
             dataset = KITTIMonoDataset(
                 self.opt.datapath, filename, is_training, self.opt.frame_ids, ".jpg", self.opt.height, self.opt.width, 4)
+            # dataset = KITTIRAWDataset(self.opt.datapath, filename,
+            #     self.opt.height, self.opt.width, self.opt.frame_ids, 4, is_training, ".jpg")
         dataloader = DataLoader(
             dataset, self.opt.batch, shuffle, num_workers = self.opt.num_workers, drop_last = True)
         return dataloader
@@ -80,7 +83,7 @@ class setting(object):
             self.parameters += list(self.model[key].parameters())
 
         self.model["inv_projection"] = Depth2PointCloud(self.opt.batch, self.opt.height, self.opt.width)
-        self.model["for_projection"]  = PointCloud2Pixel(self.opt.batch, self.opt.height, self.opt.width)
+        self.model["for_projection"] = PointCloud2Pixel(self.opt.batch, self.opt.height, self.opt.width)
 
         for key in self.model:
             self.model[key] = self.model[key].to(self.device)

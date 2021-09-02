@@ -21,6 +21,11 @@ def interpolate(tensor, height, width, mode, align_corners):
 
 
 
+def upsample(tensor):
+    return F.interpolate(tensor, scale_factor = 2, mode = "nearest")
+
+
+
 def disparity2depth(disparity, min_depth, max_depth):
     """
     disparity, min_depth, max_depth를 받아서 depth를 계산한다.
@@ -146,11 +151,6 @@ def param2matrix(axisangle, translation, invert=False):
     else:
         M = torch.matmul(T, R)
     return M
-
-
-
-def upsample(tensor):
-    return F.interpolate(tensor, scale_factor = 2, mode = "nearest")
 
 
 

@@ -84,15 +84,15 @@ class trainer(object):
                 epoch_valid[key].append(np.mean(batch_valid[key]))
 
             self.control.print(epoch, batch_train, batch_valid)
-            self.control.save(epoch, epoch_train, epoch_valid, self.setting.model)
+            self.control.save(epoch, epoch_train, epoch_valid, self.setting)
 
     
     def batch_process(self, inputs):
         outputs = {}
-        inputs, outputs = self.compute.forward_network(inputs, outputs, self.setting)
-        inputs, outputs = self.compute.pose_estimation(inputs, outputs, self.setting)
-        inputs, outputs = self.compute.depth2warping(inputs, outputs, self.setting)
-        outputs = self.compute.loss_summation(inputs, outputs, self.setting)
+        inputs, outputs = self.compute.forward_depth(inputs, outputs, self.setting)
+        inputs, outputs = self.compute.forward_pose(inputs, outputs, self.setting)
+        inputs, outputs = self.compute.image2warping(inputs, outputs, self.setting)
+        outputs = self.compute.compute_loss(inputs, outputs, self.setting)
         return outputs
 
 
