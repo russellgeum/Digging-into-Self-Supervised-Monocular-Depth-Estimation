@@ -132,6 +132,9 @@ if __name__ == "__main__":
             "custom1": {
                 "encoder": "./model_save/custom1/encoder{}.pt".format(epo),
                 "decoder": "./model_save/custom1/decoder{}.pt".format(epo)},
+            "custom2": {
+                "encoder": "./model_save/custom2/encoder{}.pt".format(epo),
+                "decoder": "./model_save/custom2/decoder{}.pt".format(epo)},
             }
         for name in ["custom1"]:
             def options():
