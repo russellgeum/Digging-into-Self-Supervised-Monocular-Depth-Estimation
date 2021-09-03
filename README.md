@@ -67,14 +67,19 @@ python model_test.py
 # Evaluation
 ```
 kitti eigen splits test
-monodepth2 original
+monodepth2 weights
 abs_rel   sqrt_rel  rmse      rmse_log  a1        a2        a3
 0.116     0.939     4.904     0.194     0.877     0.959     0.981
 
-my code
+custom1 (my code weights1)
 abs_rel   sqrt_rel  rmse      rmse_log  a1        a2        a3
 0.114     0.924     4.837     0.193     0.878     0.959     0.980
 0.115     0.925     4.841     0.193     0.877     0.959     0.980
+
+custom2 (my code weights2)
+abs_rel   sqrt_rel  rmse      rmse_log  a1        a2        a3
+0.115     0.940     4.853     0.193     0.877     0.958     0.980
+0.116     0.941     4.854     0.194     0.876     0.958     0.980
 ```
 # Reference  
 [Offical Code](https://github.com/nianticlabs/monodepth2)  
