@@ -26,14 +26,14 @@ class trainer(object):
         # pytorch_randomness()
         self.opt     = opt
         self.device  = 'cuda:0' if torch.cuda.is_available() else 'cpu'
-        print(">>> Using device name : ", self.device)
-        print(" ")
+        print(">>> Using device name: ", self.device)
 
         self.setting = setting(opt, self.device)
         self.compute = compute(opt, self.device)
         self.control = control(opt, self.device)
         print(" ")
 
+        print("Dataset           {}".format(opt.dataset))
         print("Epoch             {}".format(opt.epoch))
         print("Batch             {}".format(opt.batch))
         print("Learning rate     {}".format(opt.learning_rate))
@@ -44,12 +44,10 @@ class trainer(object):
         print("min-max depth     ({}, {})".format(opt.min_depth, opt.max_depth))
 
         print("num of iteration")
-        print("   Train         {}".format(self.setting.train_dataloader.__len__()))
-        print("   Valid         {}".format(self.setting.valid_dataloader.__len__()))
-        print("   Total train   {}".format(
-            self.opt.epoch * self.setting.train_dataloader.__len__()))
-        print("   Total valid   {}".format(
-            self.opt.epoch * self.setting.train_dataloader.__len__()))
+        print("   Train          {}".format(self.setting.train_dataloader.__len__()))
+        print("   Valid          {}".format(self.setting.valid_dataloader.__len__()))
+        print("   Total train    {}".format(self.opt.epoch * self.setting.train_dataloader.__len__()))
+        print("   Total valid    {}".format(self.opt.epoch * self.setting.train_dataloader.__len__()))
         print(" ")
 
     
@@ -68,6 +66,8 @@ class trainer(object):
                 
                 self.setting.optim["optimizer"].zero_grad()
                 train_outputs["loss"].backward()
+                print("Loss {}".format(train_outputs["loss"].item()))
+                # print(self.setting.model["decoder"].convs[("dispconv", 0)].conv.weight.grad[0, :, :, :])
                 self.setting.optim["optimizer"].step()
 
                 batch_train   = self.control.metric(train_inputs, train_outputs, batch_train)

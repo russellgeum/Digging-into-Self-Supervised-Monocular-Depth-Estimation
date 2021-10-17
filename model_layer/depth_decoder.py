@@ -9,8 +9,10 @@ import torch.nn.functional as F
 from collections import OrderedDict
 
 
+
 def upsample(tensor):
     return F.interpolate(tensor, scale_factor = 2, mode = "nearest")
+
 
 
 class ConvBlock(nn.Module):
@@ -30,6 +32,7 @@ class ConvBlock(nn.Module):
         return out
 
 
+
 class Conv3x3(nn.Module):
     def __init__(self, in_channels, out_channels, use_refl = True):
         super(Conv3x3, self).__init__()
@@ -45,6 +48,7 @@ class Conv3x3(nn.Module):
         out = self.pad(inputs)
         out = self.conv(out)
         return out
+
 
 
 class DepthDecoder(nn.Module):

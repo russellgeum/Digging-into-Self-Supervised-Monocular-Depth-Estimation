@@ -171,6 +171,7 @@ class ConvBlock(nn.Module):
         return out
 
 
+
 class Conv3x3(nn.Module):
     def __init__(self, in_channels, out_channels, use_refl = True):
         super(Conv3x3, self).__init__()
@@ -186,6 +187,7 @@ class Conv3x3(nn.Module):
         out = self.pad(inputs)
         out = self.conv(out)
         return out
+
 
 
 class Depth2PointCloud(nn.Module):
@@ -231,6 +233,7 @@ class Depth2PointCloud(nn.Module):
         #            [1, 1, 1, 1]
         self.pix_coords = nn.Parameter(torch.cat([self.pix_coords, self.ones], 1), requires_grad = False)
     
+
     def forward(self, depth, inverse_intrinsic_matrix):
         camera_coords = torch.matmul(inverse_intrinsic_matrix[:, :3, :3], self.pix_coords)
 
@@ -243,6 +246,7 @@ class Depth2PointCloud(nn.Module):
         return camera_coords
 
 
+
 class PointCloud2Pixel(nn.Module):
     def __init__(self, batch_size, height, width, eps = 1e-7):
         super(PointCloud2Pixel, self).__init__()
@@ -250,6 +254,7 @@ class PointCloud2Pixel(nn.Module):
         self.height     = height
         self.width      = width
         self.eps        = eps
+    
     
     def forward(self, camera_coords, intrinsic_matrix, transformation_matrix):
         projection    = torch.matmul(intrinsic_matrix, transformation_matrix)[:, :3, :]

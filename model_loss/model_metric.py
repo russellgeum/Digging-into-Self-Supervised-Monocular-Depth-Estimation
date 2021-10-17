@@ -106,6 +106,7 @@ def compute_depth_metric(inputs, outputs, lib = "torch"):
     return detph_error
 
 
+
 # def pose_process_disparity(l_disp, r_disp):
 #     """
 #     1. 어떤 함수인지 잘 모르겠음
@@ -118,6 +119,7 @@ def compute_depth_metric(inputs, outputs, lib = "torch"):
 #     return r_mask * l_disp + l_mask * r_disp + (1.0 - l_mask - r_mask) * m_disp
 
 
+
 # # from https://github.com/tinghuiz/SfMLearner
 # def dump_xyz(source_to_target_transformations):
 #     xyzs = []
@@ -127,6 +129,7 @@ def compute_depth_metric(inputs, outputs, lib = "torch"):
 #         cam_to_world = np.dot(cam_to_world, source_to_target_transformation)
 #         xyzs.append(cam_to_world[:3, 3])
 #     return xyzs
+
 
 
 # # from https://github.com/tinghuiz/SfMLearner

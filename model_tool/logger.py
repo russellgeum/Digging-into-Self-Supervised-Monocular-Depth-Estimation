@@ -51,12 +51,13 @@ class control(object):
     def save(self, epoch, train_log, valid_log, setting):
         save_directory = os.path.join("./model_save", self.opt.save)
         loss_directory = os.path.join(save_directory, "loss")
+
         if not os.path.isdir(save_directory):
             os.makedirs(save_directory)
         if not os.path.isdir(loss_directory):
             os.makedirs(loss_directory)
         
-        if (epoch+1) % 3 == 0: # epoch가 특정 조건을 만족시키는 조건문, 뎁스 인코더, 디코더 모델 저장
+        if (epoch+1) % 2 == 0: # epoch가 특정 조건을 만족시키는 조건문, 뎁스 인코더, 디코더 모델 저장
             for key in setting.model:
                 torch.save(setting.model[key].state_dict(),
                     os.path.join(save_directory, key + str(epoch+1) + ".pt"))

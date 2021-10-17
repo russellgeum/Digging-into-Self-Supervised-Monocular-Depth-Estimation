@@ -63,30 +63,28 @@ def inference(args):
     MIN_DEPTH = 1e-3
     MAX_DEPTH = 80.0
     filename  = readlines(testpath["kitti_{}_test".format(args.splits)])
-    # dataset   = KITTIMonoDataset(args.datapath, filename, False, [0], ".jpg", 192, 640, 4)
-    dataset   = KITTIRAWDataset(args.datapath, filename, 192, 640, [0], 4, False, ".jpg")
+    dataset   = KITTIMonoDataset_v2(args.datapath, filename, False, [0], 192, 640, ".jpg", 4)
     loader    = DataLoader(dataset, batch_size = 16, shuffle = False, drop_last = False)
     print(">>> Testset length {}, Batch iteration {}".format(len(filename), loader.__len__()))
 
     model = load_weights(args)
     print(">>> Loaded model")
 
+    result_list       = []
     disparity_list    = []
-    return_result     = []
     ground_truth_list = load_ground_truth(args, filename)
     print(">>> Loaded ground truth depth")
 
 
     with torch.no_grad():
-        for data in tqdm(loader):
-            color_image  = data[("color", 0, 0)].to(DEVICE)
-            outputs      = model["decoder"](model["encoder"](color_image))
+        for inputs in tqdm(loader):
+            outputs      = model["decoder"](model["encoder"](inputs[("color", 0, 0)].to(DEVICE)))
             pred_disp, _ = disparity2depth(outputs[("disp", 0)], MIN_DEPTH, MAX_DEPTH)
             pred_disp    = pred_disp.cpu()[:, 0].numpy()
             
-            return_result.append(outputs)
+            result_list.append(outputs)
             disparity_list.append(pred_disp)
-    disparity_list    = np.concatenate(disparity_list)
+    disparity_list = np.concatenate(disparity_list)
 
 
     errors_list = []
@@ -119,39 +117,47 @@ def inference(args):
 
     print(">>>   abs_rel   sqrt_rel  rmse      rmse_log  a1        a2        a3")
     print(">>>" + ("   {:4.3f}  " * 7).format(*mean_errors.tolist()))
-    return return_result
+    return result_list
 
 
 
 if __name__ == "__main__":
-    for epo in [18, 21]:
-        weight = {
-            "monodepth2 192x640 with pt": {
-                "encoder": "./model_save/monodepth2/mono_640x192/encoder.pth",
-                "decoder": "./model_save/monodepth2/mono_640x192/depth.pth",},
-            "custom1": {
-                "encoder": "./model_save/custom1/encoder{}.pt".format(epo),
-                "decoder": "./model_save/custom1/decoder{}.pt".format(epo)},
-            "custom2": {
-                "encoder": "./model_save/custom2/encoder{}.pt".format(epo),
-                "decoder": "./model_save/custom2/decoder{}.pt".format(epo)},
-            }
-        for name in ["custom1"]:
-            def options():
-                parser = argparse.ArgumentParser(description = "Input optional guidance for training")
-                parser.add_argument("--datapath",
-                    default = "./dataset/kitti",
-                    type = str, help = "훈련 폴더가 있는 곳")
-                parser.add_argument("--splits",
-                    default = "eigen",
-                    type = str, help = ["eigen", "eigen_benchmark"])
+    def options(name):
+        parser = argparse.ArgumentParser(description = "Input optional guidance for training")
+        parser.add_argument("--datapath",
+            default = "./dataset/kitti",
+            type = str, help = "훈련 폴더가 있는 곳")
+        parser.add_argument("--splits",
+            default = "eigen",
+            type = str, help = ["eigen", "eigen_benchmark"])
 
-                parser.add_argument("--encoder_path",
-                    default = weight[name]["encoder"],
-                    type = str, help = "Encoder weight path")
-                parser.add_argument("--decoder_path",
-                    default = weight[name]["decoder"],
-                    type = str, help = "Decoder weight path")
-                args = parser.parse_args()
-                return args
-            return_result = inference(options())
+        parser.add_argument("--encoder_path",
+            default = weight[name]["encoder"],
+            type = str, help = "인코더 가중치 경로")
+        parser.add_argument("--decoder_path",
+            default = weight[name]["decoder"],
+            type = str, help = "디코더 가중치 경로")
+        args = parser.parse_args()
+        return args
+    
+    epo = 21
+    weight = {
+        "mono_640x192": {
+            "encoder": "./model_save/monodepth2/mono_640x192/encoder.pth",
+            "decoder": "./model_save/monodepth2/mono_640x192/depth.pth",},
+        "ms_640x192": {
+            "encoder": "./model_save/monodepth2/ms_640x192/encoder.pth",
+            "decoder": "./model_save/monodepth2/ms_640x192/depth.pth",},
+        "mono": {
+            "encoder": "./model_save/mono/encoder{}.pt".format(epo),
+            "decoder": "./model_save/mono/decoder{}.pt".format(epo)},
+        "stereo": {
+            "encoder": "./model_save/stereo/encoder{}.pt".format(epo),
+            "decoder": "./model_save/stereo/decoder{}.pt".format(epo)},
+        }
+        
+    for name in ["mono_640x192", "ms_640x192", "mono", "stereo"]:
+        print("")
+        print("Type {}".format(name))
+        print("")
+        return_result = inference(options(name))
