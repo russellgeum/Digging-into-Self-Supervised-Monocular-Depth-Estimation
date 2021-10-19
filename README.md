@@ -13,9 +13,6 @@ Pillow
 torch >= 1.7.1
 albumentations == 0.5.2
 ```
-# Sample
-![image](https://github.com/Doyosae/Digging_Into_Self-Supervised_Monocular_Depth_Estimation/blob/main/sample/image.gif)  
-![disp](https://github.com/Doyosae/Digging_Into_Self-Supervised_Monocular_Depth_Estimation/blob/main/sample/disp.gif)  
 # Folder  
 ```
 dataset/
