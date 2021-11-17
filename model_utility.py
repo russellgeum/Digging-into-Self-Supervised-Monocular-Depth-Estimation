@@ -5,6 +5,7 @@ import time
 import json
 import random
 import numpy as np
+from tqdm import tqdm
 from scipy import misc
 from collections import Counter
 
@@ -197,20 +198,13 @@ def point2depth(calib_path, point_path, cam = 2, vel_depth = False):
     
 
 
-class tools(object):
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+기타 모듈
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+class Tools(object):
     def __init__(self):
         pass
 
-    @staticmethod
-    # pytorch randomnetss
-    def pytorch_randomness(random_seed = 42):
-        torch.backends.cudnn.benchmark = True
-        torch.backends.cudnn.deterministic = False
-        random.seed(random_seed)
-        np.random.seed(random_seed)
-        torch.manual_seed(random_seed)
-        torch.cuda.manual_seed(random_seed)
-        torch.cuda.manual_seed_all(random_seed) # if use multi-GPU
 
     @staticmethod
     def tensor2numpy(tensor): # 토치 텐서를 넘파이로
@@ -228,11 +222,15 @@ class tools(object):
 
 
     @staticmethod
-    def sample_dataset(dataloader): # 모델 데이터로터에서 배치 샘플 하나를 추출
+    def sample_dataset(dataloader, end): # 모델 데이터로터에서 배치 샘플 하나를 추출
         test = []
         start = time.time()
         for index, data in tqdm(enumerate(dataloader)):
             test.append(data)
+            if end == index:
+                break
+            elif end == "all":
+                pass
         print("batch sampling time:  ", time.time() - start)
         return test
 
@@ -241,11 +239,31 @@ class tools(object):
     def show_image(image, option = "torch", size = (10, 4), cmap = "magma", show_disp = True):
         """
         토치나 텐서플로우 형태의 이미지를 받아서 이미지를 띄우는 함수
+        가능한 경우
+        1. 토치 이미지 [C, H, W] 에서
+            GPU에 물려있고 gradient 추적이 되는 경우
+            GPU에 물려있고 gradient 추적이 아닌 경우
+
+        2. 텐서가 [1, C, H, W]이면 dim = 0의 1을 제거하고 [C, H, W]로 바꿈
+           텐서가 [C, H, W]이면 pass
+
+        3. [C, H, W]이면 [H, W, C]로 바꾸어서 plt.imshow() 포맷에 맞게 변경
+
         Args: tensor type
-                Pytorch:    [B, N, H, W]
-                Tensorflow: [B, H, W, C]
+            Pytorch:    [B, C, H, W]
+            Tensorflow: [B, H, W, C]
         """
         plt.rcParams["figure.figsize"] = size
+        ## 이미지의 gradient 추적이 True이면 detach()
+        if image.requires_grad == True:
+            image = image.detach()
+        else:
+            pass
+        ## 이미지의 devcie가 gpu이면 cpu()로 바꿈
+        if image.device is not "cpu":
+            image = image.cpu().numpy()
+        else:
+            image = image.numpy()
 
         if option == "torch":
             if image.shape[0] == 3 or len(image.shape) == 3:
@@ -265,6 +283,10 @@ class tools(object):
         따리서 255.로 나누어 주는 것이 중요
         그리고 cv2.imread로 불러온 이미지를 plt.imshow로 띄울때는 cv2.COLOR_BGR2RGB
         """
+        if np.min(image) < 0:
+            image = (image * 255).astype(np.uint8)
+        
+
         if show_disp:
             plt.imshow(image, cmap = cmap, vmax = np.percentile(image, 95))
             plt.axis('off')
@@ -297,3 +319,15 @@ class tools(object):
         plt.title(title)
         plt.plot(data, c = color, marker = marker, linestyle = linestyle)
         plt.show()
+
+
+    @staticmethod
+    # pytorch randomnetss
+    def pytorch_randomness(random_seed = 42):
+        torch.backends.cudnn.benchmark = True
+        torch.backends.cudnn.deterministic = False
+        random.seed(random_seed)
+        np.random.seed(random_seed)
+        torch.manual_seed(random_seed)
+        torch.cuda.manual_seed(random_seed)
+        torch.cuda.manual_seed_all(random_seed) # if use multi-GPU
