@@ -21,9 +21,8 @@ from model_loss import *
 
 DEVICE   = 'cuda:0' if torch.cuda.is_available() else 'cpu'
 testpath = {
-    "kitti_benchmark":       "./splits/kitti_test/kitti_benchmark_test_files.txt",
-    "kitti_eigen_benchmark": "./splits/kitti_test/kitti_eigen_benchmark_test_files.txt",
-    "kitti_eigen_test":      "./splits/kitti_test/kitti_eigen_test_files.txt"}
+    "kitti_eigen_full": "./splits/kitti_eigen_full/test_files.txt",
+    "kitti_eigen_zhou": "./splits/kitti_eigen_zhou/test_files.txt"}
 
 
 
@@ -62,9 +61,9 @@ def load_ground_truth(args, lines):
 def inference(args):
     MIN_DEPTH = 1e-3
     MAX_DEPTH = 80.0
-    filename  = readlines(testpath["kitti_{}_test".format(args.splits)])
+    filename  = readlines(testpath["kitti_{}".format(args.splits)])
     dataset   = KITTIMonoDataset_v2(args.datapath, filename, False, [0], 192, 640, ".jpg", 4)
-    loader    = DataLoader(dataset, batch_size = 16, shuffle = False, drop_last = False)
+    loader    = DataLoader(dataset, batch_size = 1, shuffle = False, drop_last = False)
     print(">>> Testset length {}, Batch iteration {}".format(len(filename), loader.__len__()))
 
     model = load_weights(args)
@@ -96,7 +95,7 @@ def inference(args):
         pred_disparity = cv2.resize(pred_disparity, (width, height))
         pred_depth     = 1 / pred_disparity
 
-        if args.splits == "eigen":
+        if (args.splits == "eigen_zhou") or (args.splits == "eigen_full"):
             mask      = np.logical_and(ground_truth > MIN_DEPTH, ground_truth < MAX_DEPTH)
             crop      = np.array([153, 371, 44, 1197]).astype(np.int32)
             crop_mask = np.zeros(mask.shape)
@@ -128,8 +127,8 @@ if __name__ == "__main__":
             default = "./dataset/kitti",
             type = str, help = "훈련 폴더가 있는 곳")
         parser.add_argument("--splits",
-            default = "eigen",
-            type = str, help = ["eigen", "eigen_benchmark"])
+            default = "eigen_zhou",
+            type = str, help = ["eigen_zhou", "eigen_full"])
 
         parser.add_argument("--encoder_path",
             default = weight[name]["encoder"],
@@ -143,20 +142,17 @@ if __name__ == "__main__":
     epo = 21
     weight = {
         "mono_640x192": {
-            "encoder": "./model_save/monodepth2/mono_640x192/encoder.pth",
-            "decoder": "./model_save/monodepth2/mono_640x192/depth.pth",},
+            "encoder": "./model_save/mono_640x192/encoder.pth",
+            "decoder": "./model_save/mono_640x192/depth.pth",},
         "ms_640x192": {
-            "encoder": "./model_save/monodepth2/ms_640x192/encoder.pth",
-            "decoder": "./model_save/monodepth2/ms_640x192/depth.pth",},
+            "encoder": "./model_save/ms_640x192/encoder.pth",
+            "decoder": "./model_save/ms_640x192/depth.pth",},
         "mono": {
             "encoder": "./model_save/mono/encoder{}.pt".format(epo),
-            "decoder": "./model_save/mono/decoder{}.pt".format(epo)},
-        "stereo": {
-            "encoder": "./model_save/stereo/encoder{}.pt".format(epo),
-            "decoder": "./model_save/stereo/decoder{}.pt".format(epo)},
-        }
-        
-    for name in ["mono_640x192", "ms_640x192", "mono", "stereo"]:
+            "decoder": "./model_save/mono/decoder{}.pt".format(epo)}}
+
+
+    for name in ["mono_640x192", "ms_640x192", "mono"]:
         print("")
         print("Type {}".format(name))
         print("")
