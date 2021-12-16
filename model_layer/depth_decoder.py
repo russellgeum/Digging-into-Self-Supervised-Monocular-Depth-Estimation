@@ -22,11 +22,11 @@ class ConvBlock(nn.Module):
         self.elu  = nn.ELU(inplace = True)
     
     def forward(self, inputs):
-        '''
+        """
         out = self.pad(inputs)
         out = self.conv(out)
         out = self.elu(out)
-        '''
+        """
         out = self.conv(inputs)
         out = self.elu(out)
         return out
@@ -54,12 +54,12 @@ class Conv3x3(nn.Module):
 class DepthDecoder(nn.Module):
     def __init__(self, num_ch_enc, scales = range(4), num_output_channels = 1, use_skips = True):
         super(DepthDecoder, self).__init__()
-        '''
+        """
         num_ch_enc: np.array([64, 64, 128, 256, 512])
         scales: range(4) = [0, 1, 2, 3]
         출력 채널의 수: 뎁스 맵이므로 1
         use_skips: 훈련 시에는 True이나, 추론 시에는 False
-        '''
+        """
         self.num_ch_enc = num_ch_enc
         self.num_ch_dec = np.array([16, 32, 64, 128, 256])
 

@@ -9,14 +9,14 @@ import torch.nn.functional as F
 from collections import OrderedDict
 
 
-
+ 
 class PoseDecoder(nn.Module):
     def __init__(self, num_ch_enc, num_input_features, num_frames_to_predict_for=None, stride=1):
-        '''
+        """
         num_channel_encoder : 인코더 채널의 수
         num_input_features  : 입력 피처의 수
         num_frame_to_predict_for : 예측한 pose의 수
-        '''
+        """
         super(PoseDecoder, self).__init__()
 
         self.num_ch_enc = num_ch_enc
@@ -61,10 +61,10 @@ class PoseDecoder(nn.Module):
 
 class PoseCNN(nn.Module):
     def __init__(self, num_input_frames):
-        '''
+        """
         num_input_frames: 입력하는 이미지의 수
         nn.Conv2d(in_channels, out_channels, kerenl_size, stride, padding)
-        '''
+        """
         super(PoseCNN, self).__init__()
         self.num_input_frames = num_input_frames
         

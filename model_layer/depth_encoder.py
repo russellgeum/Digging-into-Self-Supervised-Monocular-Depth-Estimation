@@ -10,6 +10,7 @@ import torchvision.models as models
 import torch.utils.model_zoo as model_zoo
 
 
+
 class ResNetMultiImageInput(models.ResNet):
     """
     Constructs a resnet model with varying number of input images.
@@ -39,6 +40,7 @@ class ResNetMultiImageInput(models.ResNet):
                 nn.init.constant_(m.bias, 0)
 
 
+
 def resnet_multiimage_input(num_layers, pretrained = True, num_input_images = 1):
     """
     Constructs a ResNet model.
@@ -57,6 +59,7 @@ def resnet_multiimage_input(num_layers, pretrained = True, num_input_images = 1)
         loaded['conv1.weight'] = torch.cat([loaded['conv1.weight']] * num_input_images, 1) / num_input_images
         model.load_state_dict(loaded)
     return model
+
 
 
 class ResnetEncoder(nn.Module):
