@@ -1,4 +1,4 @@
-# monodepth2 (NOT official)
+# monodepth2 (Not Official)
 Reproducing of "Digging into Self-Supervised Monocular Depth Estimation (ICCV 2019)"  
 This repo follow up new KITTI depth bechmark split (But except Person videos)  
 - [Digging into Self-Supervised Monocular Depth Estimation](https://arxiv.org/abs/1806.01260)  
