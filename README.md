@@ -61,24 +61,19 @@ python model_train.py --pose_type separate --datatype kitti_eigen_zhou --batch 1
 ```
 python model_test.py
 ```
+
 # Evaluation
-```
-kitti eigen splits test
-monodepth2 weights
-abs_rel   sqrt_rel  rmse      rmse_log  a1        a2        a3
-0.116     0.939     4.904     0.194     0.877     0.959     0.981
+## KITTI Eigen Splits Test
 
-custom1 (my code weights1)
-abs_rel   sqrt_rel  rmse      rmse_log  a1        a2        a3
-0.114     0.924     4.837     0.193     0.878     0.959     0.980
-0.115     0.925     4.841     0.193     0.877     0.959     0.980
+| Model                  | abs_rel | sqrt_rel | rmse  | rmse_log | a1   | a2   | a3   |
+|------------------------|---------|----------|-------|----------|------|------|------|
+| Monodepth2 Weights     | 0.116   | 0.939    | 4.904 | 0.194    | 0.877| 0.959| 0.981|
+| Custom1 (Weights1)     | 0.114   | 0.924    | 4.837 | 0.193    | 0.878| 0.959| 0.980|
+| Custom1 (Weights1)     | 0.115   | 0.925    | 4.841 | 0.193    | 0.877| 0.959| 0.980|
+| Custom2 (Weights2)     | 0.115   | 0.940    | 4.853 | 0.193    | 0.877| 0.958| 0.980|
+| Custom2 (Weights2)     | 0.116   | 0.941    | 4.854 | 0.194    | 0.876| 0.958| 0.980|
 
-custom2 (my code weights2)
-abs_rel   sqrt_rel  rmse      rmse_log  a1        a2        a3
-0.115     0.940     4.853     0.193     0.877     0.958     0.980
-0.116     0.941     4.854     0.194     0.876     0.958     0.980
-```
 # Reference  
-[Offical Code](https://github.com/nianticlabs/monodepth2)  
-[KITTI Dataset](https://github.com/Doyosae/KITTIDataset)  
-[Cityscapes Dataset](https://github.com/Doyosae/CityscapesDataset)
+- [Offical Code](https://github.com/nianticlabs/monodepth2)  
+- [KITTI Dataset](https://github.com/Doyosae/KITTIDataset)  
+- [Cityscapes Dataset](https://github.com/Doyosae/CityscapesDataset)
